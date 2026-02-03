@@ -377,6 +377,18 @@ When the user asks to build/implement something, the agent MUST follow this end-
 - **DO NOT start execution until user confirms**
 - If user has concerns → adjust plan, re-show, re-confirm
 
+#### Pre-Launch Checklist (MANDATORY)
+
+Before spawning ANY implementation agent, the coordinator MUST verify:
+
+- [ ] Story status is `to-dev` (not backlog!) — run `task-board progress status STORY-XX to-dev`
+- [ ] Agent assigned via `task-board assign STORY-XX --agent "agent-name"`
+- [ ] Prompt includes CONCRETE task IDs (e.g., `TASK-260203-ae3fcd`), NOT placeholders like `TASK-XXX`
+- [ ] Prompt starts with the FIRST command agent must run (status update)
+- [ ] First task ID in prompt matches the Phase 1 unblocked task
+
+**If you skip this checklist, agents WILL ignore task-board updates.**
+
 #### Execution via Sub-Agents
 - **The coordinator is a SUPERVISOR — it does NOT write code itself**
 - ALL implementation work (code, tests, docs updates) goes to sub-agents
@@ -491,6 +503,8 @@ task-board validate
 - **Sub-agents write tests** — every sub-agent is responsible for tests in its scope
 - **Supervisor reviews** — coordinator must verify sub-agent work before marking done
 - **Visualize at milestones** — render graphs before, during, and after execution
+- **Verify agents early** — run `task-board agents` within 2 minutes of launch; if status not updated, stop and restart with better prompt
+- **Concrete IDs only** — never use placeholders like `TASK-XXX` in prompts; always use real IDs like `TASK-260203-ae3fcd`
 
 ---
 
@@ -604,6 +618,21 @@ Dashboard shows: agent name, scope, status, child progress (done/total), last up
 
 ## Sub-Agent Prompt Templates (CRITICAL)
 
+### ⚠️ Sub-Agent Reality Check
+
+Sub-agents often ignore task-board CLI instructions when focused on writing code. This is a known limitation. To maximize compliance:
+
+1. **Put the CLI command FIRST** in the prompt — before any context or task description
+2. **Use CONCRETE IDs** — never use placeholders like `TASK-XXX`, always use real IDs like `TASK-260203-ae3fcd`
+3. **Repeat the instruction** at the END of the prompt as a reminder
+4. **Verify within 2 minutes** — run `task-board agents` shortly after launch to confirm status updates
+5. **If no updates** — stop the agent, fix the prompt, restart
+
+**Common failure modes:**
+- Agent reads code, starts implementing, forgets to update status
+- Agent uses placeholder IDs from template instead of real IDs
+- Agent treats task-board instructions as "optional"
+
 ### Decomposition Agent (for Story Detailing phase)
 
 When spawning a sub-agent to decompose a story into tasks:
@@ -630,26 +659,49 @@ AFTER finishing decomposition:
 When spawning a sub-agent to implement tasks:
 
 ```
+## ⚠️ FIRST COMMAND — RUN IMMEDIATELY
+
+Before reading ANY code, run this command RIGHT NOW:
+
+  task-board progress status TASK-260203-ae3fcd development
+
+This is NOT optional. The coordinator is monitoring via `task-board agents`.
+If you don't run this command, you will be stopped and restarted.
+
+---
+
 ## Task Board Protocol (MANDATORY)
 
-You MUST use task-board CLI to track your progress. This is not optional.
+You MUST use task-board CLI to track your progress.
 
-BEFORE starting any task:
-  task-board progress status TASK-XXX development
+For EACH task:
+1. BEFORE starting: `task-board progress status TASK-260203-XXXXXX development`
+2. Do the work (write code, tests)
+3. AFTER completing: `task-board progress status TASK-260203-XXXXXX to-review`
+4. Move to next task
 
-AFTER completing a task (code ready for review):
-  task-board progress status TASK-XXX to-review
+If blocked:
+  task-board progress status TASK-260203-XXXXXX blocked
+  task-board progress notes TASK-260203-XXXXXX "Reason for block"
 
-If blocked by external reason:
-  task-board progress status TASK-XXX blocked
-  task-board progress notes TASK-XXX "Reason for block"
+---
 
-For each task, the workflow is:
-- Set status to development (starting work)
-- Do the work (write code, tests)
-- Set status to to-review (ready for orchestrator review)
-- Move to next task
+## Your Tasks (in order):
+
+1. TASK-260203-ae3fcd: [task name] — [description]
+2. TASK-260203-xxxxxx: [task name] — [description] (blocked by above)
+...
+
+---
+
+## REMINDER: Update task-board status before and after EACH task!
 ```
+
+**Key differences from naive template:**
+- First command is FIRST, before any context
+- Concrete task IDs, not placeholders
+- Warning about being stopped if not compliant
+- Reminder repeated at the end
 
 **Why this matters:**
 - `task-board agents` shows real-time progress based on statuses

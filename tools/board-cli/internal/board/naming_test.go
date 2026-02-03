@@ -8,22 +8,23 @@ func TestParseDirName(t *testing.T) {
 	tests := []struct {
 		input    string
 		wantType ElementType
+		wantNum  int
 		wantName string
 		wantErr  bool
 	}{
-		{"EPIC-260203-a1b2c3_recording", EpicType, "recording", false},
-		{"STORY-260203-d4e5f6_audio-capture", StoryType, "audio-capture", false},
-		{"TASK-260203-g7h8i9_audiorecorder-interface", TaskType, "audiorecorder-interface", false},
-		{"BUG-260203-m3n4o5_some-bug", BugType, "some-bug", false},
-		{"invalid", "", "", true},
-		{"EPIC-01_recording", "", "", true},          // old format not supported
-		{"TASK-12_name", "", "", true},               // old format not supported
-		{"README.md", "", "", true},
+		{"EPIC-260203-a1b2c3_recording", EpicType, 0, "recording", false},
+		{"STORY-260203-d4e5f6_audio-capture", StoryType, 0, "audio-capture", false},
+		{"TASK-260203-g7h8i9_audiorecorder-interface", TaskType, 0, "audiorecorder-interface", false},
+		{"BUG-260203-m3n4o5_some-bug", BugType, 0, "some-bug", false},
+		{"EPIC-01_recording", EpicType, 1, "recording", false},
+		{"TASK-12_name", TaskType, 12, "name", false},
+		{"invalid", "", 0, "", true},
+		{"README.md", "", 0, "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			gotType, _, gotName, err := ParseDirName(tt.input)
+			gotType, gotNum, gotName, err := ParseDirName(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseDirName(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 				return
@@ -31,6 +32,9 @@ func TestParseDirName(t *testing.T) {
 			if !tt.wantErr {
 				if gotType != tt.wantType {
 					t.Errorf("type = %v, want %v", gotType, tt.wantType)
+				}
+				if gotNum != tt.wantNum {
+					t.Errorf("num = %v, want %v", gotNum, tt.wantNum)
 				}
 				if gotName != tt.wantName {
 					t.Errorf("name = %q, want %q", gotName, tt.wantName)
@@ -44,21 +48,22 @@ func TestParseID(t *testing.T) {
 	tests := []struct {
 		input    string
 		wantType ElementType
+		wantNum  int
 		wantErr  bool
 	}{
-		{"EPIC-260203-a1b2c3", EpicType, false},
-		{"STORY-260203-d4e5f6", StoryType, false},
-		{"TASK-260203-g7h8i9", TaskType, false},
-		{"BUG-260203-m3n4o5", BugType, false},
-		{"task-260203-g7h8i9", TaskType, false}, // case insensitive
-		{"EPIC-01", "", true},                    // old format not supported
-		{"TASK-12", "", true},                    // old format not supported
-		{"invalid", "", true},
+		{"EPIC-260203-a1b2c3", EpicType, 0, false},
+		{"STORY-260203-d4e5f6", StoryType, 0, false},
+		{"TASK-260203-g7h8i9", TaskType, 0, false},
+		{"BUG-260203-m3n4o5", BugType, 0, false},
+		{"task-260203-g7h8i9", TaskType, 0, false}, // case insensitive
+		{"EPIC-01", EpicType, 1, false},
+		{"TASK-12", TaskType, 12, false},
+		{"invalid", "", 0, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			gotType, _, err := ParseID(tt.input)
+			gotType, gotNum, err := ParseID(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseID(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 				return
@@ -66,6 +71,9 @@ func TestParseID(t *testing.T) {
 			if !tt.wantErr {
 				if gotType != tt.wantType {
 					t.Errorf("type = %v, want %v", gotType, tt.wantType)
+				}
+				if gotNum != tt.wantNum {
+					t.Errorf("num = %v, want %v", gotNum, tt.wantNum)
 				}
 			}
 		})
