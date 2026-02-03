@@ -12,7 +12,7 @@ func TestAssignSetsAssignedTo(t *testing.T) {
 	boardDir = bd
 	assignAgent = "agent-1"
 
-	err := runAssign(assignCmd, []string{"STORY-03"})
+	err := runAssign(assignCmd, []string{testStory3ID})
 	if err != nil {
 		t.Fatalf("runAssign: %v", err)
 	}
@@ -22,7 +22,7 @@ func TestAssignSetsAssignedTo(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	elem := b.FindByID("STORY-03")
+	elem := b.FindByID(testStory3ID)
 	if elem.AssignedTo != "agent-1" {
 		t.Errorf("AssignedTo = %q, want %q", elem.AssignedTo, "agent-1")
 	}
@@ -35,7 +35,7 @@ func TestAssignUpdatesLastUpdate(t *testing.T) {
 
 	before := time.Now().UTC().Add(-time.Second)
 
-	err := runAssign(assignCmd, []string{"TASK-01"})
+	err := runAssign(assignCmd, []string{testTask1ID})
 	if err != nil {
 		t.Fatalf("runAssign: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestAssignUpdatesLastUpdate(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	elem := b.FindByID("TASK-01")
+	elem := b.FindByID(testTask1ID)
 	if elem.LastUpdate.Before(before) || elem.LastUpdate.After(after) {
 		t.Errorf("LastUpdate = %v, want between %v and %v", elem.LastUpdate, before, after)
 	}
@@ -59,13 +59,13 @@ func TestUnassignClearsAssignedTo(t *testing.T) {
 
 	// First assign
 	assignAgent = "agent-1"
-	err := runAssign(assignCmd, []string{"STORY-03"})
+	err := runAssign(assignCmd, []string{testStory3ID})
 	if err != nil {
 		t.Fatalf("runAssign: %v", err)
 	}
 
 	// Then unassign
-	err = runUnassign(unassignCmd, []string{"STORY-03"})
+	err = runUnassign(unassignCmd, []string{testStory3ID})
 	if err != nil {
 		t.Fatalf("runUnassign: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestUnassignClearsAssignedTo(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	elem := b.FindByID("STORY-03")
+	elem := b.FindByID(testStory3ID)
 	if elem.AssignedTo != "" {
 		t.Errorf("AssignedTo = %q, want empty", elem.AssignedTo)
 	}
@@ -86,7 +86,7 @@ func TestUnassignOnUnassignedElement(t *testing.T) {
 	boardDir = bd
 
 	// STORY-03 is not assigned to anyone by default
-	err := runUnassign(unassignCmd, []string{"STORY-03"})
+	err := runUnassign(unassignCmd, []string{testStory3ID})
 	if err != nil {
 		t.Fatalf("runUnassign: %v", err)
 	}

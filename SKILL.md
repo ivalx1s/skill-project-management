@@ -52,7 +52,7 @@ task-board update TASK-12 --title "new title" --description "..." --scope "..." 
 task-board show TASK-12
 
 # Progress & status
-task-board progress status TASK-12 progress    # open|progress|done|closed|blocked
+task-board progress status TASK-12 development # backlog|analysis|to-dev|development|to-review|reviewing|done|closed|blocked
 task-board progress checklist TASK-12           # show checklist
 task-board progress check TASK-12 3            # check item
 task-board progress uncheck TASK-12 2          # uncheck item
@@ -104,73 +104,128 @@ Epic → Story → Task/Bug
 
 ### Naming Convention
 
-**Skvoznaya (global) numbering** — each type has its own global auto-increment counter.
+**Distributed IDs** — each element gets a unique ID based on date + random hash.
 
 ```
-EPIC-01_recording/
-  STORY-05_audio-capture/
-    TASK-12_audiorecorder-interface/
-    TASK-13_implementation/
-    BUG-47_some-bug/
+EPIC-260203-a1b2c3_recording/
+  STORY-260203-d4e5f6_audio-capture/
+    TASK-260203-g7h8i9_audiorecorder-interface/
+    TASK-260203-j0k1l2_implementation/
+    BUG-260203-m3n4o5_some-bug/
 ```
 
-Format: `{TYPE}-{NN}_{kebab-case-name}`
-- `EPIC-NN_name`
-- `STORY-NN_name`
-- `TASK-NN_name`
-- `BUG-NN_name`
+Format: `{TYPE}-{YYMMDD}-{hash}_{kebab-case-name}`
+- `EPIC-YYMMDD-xxxxxx_name`
+- `STORY-YYMMDD-xxxxxx_name`
+- `TASK-YYMMDD-xxxxxx_name`
+- `BUG-YYMMDD-xxxxxx_name`
 
-IDs are globally unique: `TASK-12` exists only once across the entire board.
+Where:
+- `YYMMDD` — creation date (year, month, day)
+- `xxxxxx` — 6-character base36 hash (collision-resistant)
+
+IDs are globally unique and work in parallel environments (no counter conflicts).
 
 ### Directory Layout
 
 ```
 .task-board/
-├── system.md                     # Global counters
-├── EPIC-01_recording/
+├── EPIC-260203-a1b2c3_recording/
 │   ├── README.md                 # Epic description, scope, AC
 │   ├── progress.md               # Status, blockedBy, checklist, notes
-│   ├── STORY-01_audio-capture/
+│   ├── STORY-260203-d4e5f6_audio-capture/
 │   │   ├── README.md
 │   │   ├── progress.md
-│   │   ├── TASK-01_interface/
+│   │   ├── TASK-260203-g7h8i9_interface/
 │   │   │   ├── README.md
 │   │   │   └── progress.md
-│   │   ├── TASK-02_implementation/
+│   │   ├── TASK-260203-j0k1l2_implementation/
 │   │   │   ├── README.md
 │   │   │   └── progress.md
-│   │   └── BUG-01_crash-on-start/
+│   │   └── BUG-260203-m3n4o5_crash-on-start/
 │   │       ├── README.md
 │   │       └── progress.md
-│   └── STORY-02_amplitude/
+│   └── STORY-260203-p6q7r8_amplitude/
 │       └── ...
-└── EPIC-02_storage/
+└── EPIC-260203-s9t0u1_storage/
     └── ...
 ```
 
-### system.md
-
-Tracks global counters. Managed automatically by CLI.
-
-```markdown
-## Counters
-- epic: 9
-- story: 43
-- task: 156
-- bug: 11
-```
+No `system.md` needed — IDs are self-contained and don't require global counters.
 
 ---
 
 ## Statuses
 
-`open` | `progress` | `done` | `closed` | `blocked`
+9 statuses organized in a workflow:
 
-- **open** — not started
-- **progress** — in work
-- **done** — completed
-- **closed** — archived/won't do
-- **blocked** — waiting on dependency
+| Status | Meaning | Who sets |
+|--------|---------|----------|
+| **backlog** | Captured, no work yet | anyone |
+| **analysis** | Researching, decomposing | anyone |
+| **to-dev** | Ready for development | orchestrator |
+| **development** | Writing code | sub-agent |
+| **to-review** | Code ready for review | sub-agent |
+| **reviewing** | Checking the work | orchestrator (auto) |
+| **done** | Reviewed and accepted | orchestrator (auto) |
+| **closed** | Won't do (reason in notes) | anyone |
+| **blocked** | External block (reason in notes) | anyone |
+
+### Status Flow
+
+**Happy path:**
+```
+backlog → analysis → to-dev → development → to-review → reviewing → done
+```
+
+**Returns from reviewing:**
+- `reviewing → analysis` — need more research
+- `reviewing → to-dev` — code issues, needs rework
+
+**Terminal from any status:**
+- `any → closed` — won't do / cancelled
+- `any → blocked` — external block
+
+**Note on closed:** Use `closed` for cancelled, obsolete, or won't-do items. Don't delete — close with a note explaining why. History is preserved, and the item can be reopened if needed.
+
+**Don't delete elements.** Use `closed` instead of `delete`. Deletion loses history and context. The only exception is removing test/junk data during board setup.
+
+**Orchestrator auto-review:** When sub-agent sets `to-review`, orchestrator automatically picks it up for review (`reviewing`) and closes (`done`) without user confirmation. User only involved if issues found — then task returns to `to-dev` or `analysis`.
+
+### blocked vs is_blocked
+
+Two different concepts:
+
+- **blocked** (status) — explicit status for external blocks outside the board
+- **is_blocked** (computed) — from `blocked-by` dependencies; if dependency is not `done`/`closed`, element is blocked
+
+CLI display:
+```
+TASK-05: to-dev [BLOCKED by TASK-02]     ← computed from dependency
+TASK-07: blocked                          ← explicit status
+```
+
+### Auto-Promotion & Auto-Reopen
+
+The CLI automatically manages parent statuses:
+
+**Auto-promotion:** When all children of a story/epic are `done` or `closed`, the parent is automatically promoted to `done`. Cascades up the hierarchy.
+
+```bash
+task-board progress status TASK-12 done
+# TASK-12 → done
+# STORY-05 → done (auto-promoted)
+# EPIC-01 → done (auto-promoted)
+```
+
+**Auto-reopen:** When a child becomes active and the parent is `done`/`closed`, the parent is reopened. Cascades up.
+
+```bash
+task-board progress status TASK-12 to-dev
+# TASK-12 → to-dev
+# STORY-05 → development (auto-reopened)
+# EPIC-01 → development (auto-reopened)
+```
 
 ---
 
@@ -227,7 +282,7 @@ Started implementation
 ```
 
 **Fields:**
-- **Status** — `open` | `progress` | `done` | `closed` | `blocked`
+- **Status** — `backlog` | `analysis` | `to-dev` | `development` | `to-review` | `reviewing` | `done` | `closed` | `blocked`
 - **Assigned To** — agent or person working on this element (set via `task-board assign`)
 - **Created** — ISO 8601 timestamp, set once at creation
 - **Last Update** — ISO 8601 timestamp, auto-updated on every progress.md write
@@ -257,7 +312,7 @@ Bugs are elements of the board, living inside stories alongside tasks.
 task-board create bug --story STORY-05 --name "crash-on-start" --description "App crashes when starting recording"
 
 # Track like any element
-task-board progress status BUG-01 progress
+task-board progress status BUG-01 development
 task-board progress add-item BUG-01 "Reproduce the issue"
 task-board progress add-item BUG-01 "Find root cause"
 task-board progress add-item BUG-01 "Write fix"
@@ -272,27 +327,57 @@ task-board progress add-item BUG-01 "Add regression test"
 
 When the user asks to build/implement something, the agent MUST follow this end-to-end flow:
 
-#### 1. Spec
+#### Spec
 - Capture the request in `SPEC.md` (create or update)
 - Clarify requirements with the user if anything is ambiguous
 - SPEC is the source of truth — all work traces back to it
 
-#### 2. Plan on the Board
-- Create epics, stories, and tasks on the board via `task-board create`
+#### Plan on the Board
+- Create epics and stories on the board via `task-board create`
 - Refine each element: read the generated README.md, clarify gaps with user, update via `task-board update`
 - No element should have placeholder text — description and AC must be complete and unambiguous
-- Set up dependencies via `task-board link` (CLI auto-escalates cross-parent links)
 
-#### 3. Phase Planning
+#### Story Detailing (MANDATORY before planning)
+- **Delegate to sub-agents:** spawn sub-agents to decompose each story
+- Sub-agent workflow:
+  - Set story status to `analysis`: `task-board progress status STORY-XX analysis`
+  - Read the story README.md
+  - Explore relevant codebase areas
+  - Create tasks that break down the implementation work
+  - Each task should be atomic — one clear deliverable
+  - Set task dependencies within the story via `task-board link`
+  - **IMPORTANT:** After finishing, set story back to `to-dev` (NOT `done`!)
+    - `done` means implementation complete, not decomposition complete
+    - `task-board progress status STORY-XX to-dev`
+- **Orchestrator reviews:** after sub-agents finish, review the decomposition
+  - Are tasks granular enough?
+  - Are descriptions and AC clear?
+  - Any missing tasks?
+- **Do NOT proceed to Phase Planning until all stories have tasks**
+- This ensures the plan shows the real scope of work
+
+#### Phase Planning
+- **Review cross-story dependencies:** sub-agents set dependencies within their story, but orchestrator must link dependencies BETWEEN stories
+- Add missing cross-story/cross-epic links via `task-board link` (CLI auto-escalates to parent level)
 - Run `task-board plan` to build phases from the dependency graph
-- Review phases with the user — which stories are parallel, which are sequential
+- Verify phases make sense — adjust dependencies if needed
 - Render graphs for visual overview:
   ```bash
   task-board plan EPIC-XX --render --format png                  # hierarchy view
   task-board plan EPIC-XX --render --format png --layout phases  # phases view
   ```
 
-#### 4. Parallel Execution via Sub-Agents
+#### User Approval (MANDATORY)
+- **ALWAYS show the plan to the user and wait for explicit approval**
+- Display:
+  - Phase breakdown: `task-board plan EPIC-XX`
+  - Task-level details: `task-board plan STORY-XX`
+  - Summary of what will be built
+- Ask: "Plan ready. Proceed?" (or similar)
+- **DO NOT start execution until user confirms**
+- If user has concerns → adjust plan, re-show, re-confirm
+
+#### Execution via Sub-Agents
 - **The coordinator is a SUPERVISOR — it does NOT write code itself**
 - ALL implementation work (code, tests, docs updates) goes to sub-agents
 - Assign agents to stories/tasks: `task-board assign STORY-XX --agent "agent-name"`
@@ -305,7 +390,7 @@ When the user asks to build/implement something, the agent MUST follow this end-
 - Wait for Phase N to complete before starting Phase N+1
 - Even small tasks go to sub-agents — the coordinator only plans, delegates, and reviews
 
-#### 5. Supervision
+#### Supervision
 - Monitor progress: `task-board agents --stale 60`
 - When a sub-agent finishes — **review its work**:
   - Run tests: do they pass?
@@ -315,14 +400,14 @@ When the user asks to build/implement something, the agent MUST follow this end-
 - If the work is solid — move tasks to done
 - **Never do the sub-agent's work** — always delegate back
 
-#### 6. Board Hygiene
+#### Board Hygiene
 - Keep the board in sync with reality at all times
-- Move tasks through statuses as work progresses: `open` → `progress` → `done`
+- Move tasks through statuses as work progresses: `to-dev` → `development` → `to-review` → `reviewing` → `done`
 - Close stories when all tasks are done
 - Close epics when all stories are done
 - Run `task-board validate` periodically
 
-#### 7. Visualization
+#### Visualization
 - Render graphs at key milestones for the user:
   - Before starting: show the plan and phases
   - During execution: show progress (colors reflect statuses)
@@ -345,17 +430,21 @@ When creating ANY element (epic/story/task/bug), the agent MUST:
 
 ### Project Start
 
-1. Create `.task-board/` via first `task-board create` (auto-creates)
-2. Break SPEC into epics: `task-board create epic --name "..."`
-3. Create stories for each epic: `task-board create story --epic EPIC-01 --name "..."`
-4. Detail tasks when taking story into work
+- Create `.task-board/` via first `task-board create` (auto-creates)
+- Break SPEC into epics: `task-board create epic --name "..."`
+- Create stories for each epic: `task-board create story --epic EPIC-01 --name "..."`
+- Detail tasks for each story: `task-board create task --story STORY-XX --name "..."`
+- Run phase planning only after all stories have tasks
 
 ### Working on a Task
 
-1. Choose task → `task-board progress status TASK-12 progress`
-2. Work
-3. Done → `task-board progress status TASK-12 done`
-4. Update checklist along the way
+1. Choose task → `task-board progress status TASK-12 development`
+2. Work (write code, tests)
+3. Ready for review → `task-board progress status TASK-12 to-review`
+4. Orchestrator reviews → `task-board progress status TASK-12 reviewing`
+5. If OK → `task-board progress status TASK-12 done`
+6. If issues → `task-board progress status TASK-12 to-dev` (back to sub-agent)
+7. Update checklist along the way
 
 ### Dependencies
 
@@ -363,9 +452,9 @@ When creating ANY element (epic/story/task/bug), the agent MUST:
 # TASK-13 depends on TASK-12
 task-board link TASK-13 --blocked-by TASK-12
 
-# CLI will refuse to move TASK-13 to progress/done while TASK-12 is not done
-task-board progress status TASK-13 progress
-# Error: cannot set TASK-13 to progress — blocked by: TASK-12 (status: open)
+# CLI will refuse to move TASK-13 to development while TASK-12 is not done
+task-board progress status TASK-13 development
+# Error: cannot start TASK-13 — blocked by: TASK-12 (status: to-dev)
 
 # Remove dependency
 task-board unlink TASK-13 --blocked-by TASK-12
@@ -394,7 +483,7 @@ task-board validate
 
 ## Tips
 
-- **Don't create all tasks upfront** — detail when taking story into work
+- **Detail stories before planning** — create tasks for all stories before phase planning, so the plan shows real scope
 - **AC must be verifiable** — "works" is bad, "test passes" is good
 - **Update progress immediately** — don't defer
 - **Use checklist** for tracking subtasks within a task
@@ -512,5 +601,65 @@ Dashboard shows: agent name, scope, status, child progress (done/total), last up
 2. Each sub-agent works on its scope, updating task statuses
 3. Coordinator monitors: `task-board agents`
 4. When all done — agents auto-disappear from default dashboard view
+
+## Sub-Agent Prompt Templates (CRITICAL)
+
+### Decomposition Agent (for Story Detailing phase)
+
+When spawning a sub-agent to decompose a story into tasks:
+
+```
+## Task Board Protocol (MANDATORY)
+
+You are decomposing a story into tasks. This is PLANNING, not implementation.
+
+BEFORE starting:
+  task-board progress status STORY-XX analysis
+
+Create tasks:
+  task-board create task --story STORY-XX --name "task-name" --description "..."
+  task-board update TASK-YY --ac "- criterion 1\n- criterion 2"
+  task-board link TASK-YY --blocked-by TASK-ZZ  (if dependencies exist)
+
+AFTER finishing decomposition:
+  task-board progress status STORY-XX to-dev   # NOT done! Decomposition != implementation
+```
+
+### Implementation Agent (for Execution phase)
+
+When spawning a sub-agent to implement tasks:
+
+```
+## Task Board Protocol (MANDATORY)
+
+You MUST use task-board CLI to track your progress. This is not optional.
+
+BEFORE starting any task:
+  task-board progress status TASK-XXX development
+
+AFTER completing a task (code ready for review):
+  task-board progress status TASK-XXX to-review
+
+If blocked by external reason:
+  task-board progress status TASK-XXX blocked
+  task-board progress notes TASK-XXX "Reason for block"
+
+For each task, the workflow is:
+- Set status to development (starting work)
+- Do the work (write code, tests)
+- Set status to to-review (ready for orchestrator review)
+- Move to next task
+```
+
+**Why this matters:**
+- `task-board agents` shows real-time progress based on statuses
+- If sub-agent doesn't update statuses, coordinator sees stale data
+- Board becomes useless for tracking
+
+**Verification after sub-agent completes:**
+```bash
+task-board list tasks --story STORY-XX   # All should be to-review
+task-board agents                         # Agent should show N/N to-review
+```
 
 ---

@@ -20,13 +20,13 @@ func TestListEpics(t *testing.T) {
 func TestListTasksFilterStatus(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
-	listStatus = "open"
+	listStatus = "to-dev"
 	listEpic = ""
 	listStory = ""
 
 	err := runList(listCmd, []string{"tasks"})
 	if err != nil {
-		t.Fatalf("runList tasks --status open: %v", err)
+		t.Fatalf("runList tasks --status to-dev: %v", err)
 	}
 }
 
@@ -35,7 +35,7 @@ func TestListTasksFilterStory(t *testing.T) {
 	boardDir = bd
 	listStatus = ""
 	listEpic = ""
-	listStory = "STORY-01"
+	listStory = testStory1ID
 
 	err := runList(listCmd, []string{"tasks"})
 	if err != nil {
@@ -47,7 +47,7 @@ func TestListStoriesFilterEpic(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
 	listStatus = ""
-	listEpic = "EPIC-01"
+	listEpic = testEpic1ID
 	listStory = ""
 
 	err := runList(listCmd, []string{"stories"})

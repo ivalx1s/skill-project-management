@@ -49,8 +49,8 @@ func TestAgentsOneAgent(t *testing.T) {
 	agentsAll = false
 
 	// Assign agent-1 to STORY-01 with recent update
-	storyDir := filepath.Join(bd, "EPIC-01_recording", "STORY-01_audio-capture")
-	writeAssignee(t, storyDir, "agent-1", board.StatusProgress, time.Now().UTC())
+	storyDir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture")
+	writeAssignee(t, storyDir, "agent-1", board.StatusDevelopment, time.Now().UTC())
 
 	out := captureOutput(t, func() {
 		err := runAgents(agentsCmd, nil)
@@ -65,7 +65,7 @@ func TestAgentsOneAgent(t *testing.T) {
 	if !strings.Contains(out, "agent-1") {
 		t.Fatalf("expected agent-1 in output, got: %s", out)
 	}
-	if !strings.Contains(out, "STORY-01") {
+	if !strings.Contains(out, testStory1ID) {
 		t.Fatalf("expected STORY-01 in output, got: %s", out)
 	}
 	if !strings.Contains(out, "Total: 1 agents, 1 active, 0 done") {
@@ -78,7 +78,7 @@ func TestAgentsAllShowsDone(t *testing.T) {
 	boardDir = bd
 
 	// Assign agent-1 to STORY-01 with done status and old update (should be filtered without --all)
-	storyDir := filepath.Join(bd, "EPIC-01_recording", "STORY-01_audio-capture")
+	storyDir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture")
 	writeAssignee(t, storyDir, "agent-1", board.StatusDone, time.Now().UTC().Add(-2*time.Hour))
 
 	// Without --all: should be filtered (done + old update)
@@ -115,7 +115,7 @@ func TestAgentsFreshnessFilter(t *testing.T) {
 	agentsAll = false
 
 	// Done + fresh (within 30 min) — should show
-	storyDir := filepath.Join(bd, "EPIC-01_recording", "STORY-01_audio-capture")
+	storyDir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture")
 	writeAssignee(t, storyDir, "agent-fresh", board.StatusDone, time.Now().UTC().Add(-10*time.Minute))
 
 	out := captureOutput(t, func() {
@@ -157,15 +157,15 @@ func TestChildProgress(t *testing.T) {
 	boardDir = bd
 
 	// Set TASK-01 and TASK-02 to done, TASK-03 stays open
-	task1Dir := filepath.Join(bd, "EPIC-01_recording", "STORY-01_audio-capture", "TASK-01_interface")
-	task2Dir := filepath.Join(bd, "EPIC-01_recording", "STORY-01_audio-capture", "TASK-02_impl")
+	task1Dir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture", testTask1ID+"_interface")
+	task2Dir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture", testTask2ID+"_impl")
 
 	writeAssignee(t, task1Dir, "", board.StatusDone, time.Now().UTC())
 	writeAssignee(t, task2Dir, "", board.StatusDone, time.Now().UTC())
 
 	// Assign agent to STORY-01
-	storyDir := filepath.Join(bd, "EPIC-01_recording", "STORY-01_audio-capture")
-	writeAssignee(t, storyDir, "agent-1", board.StatusProgress, time.Now().UTC())
+	storyDir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture")
+	writeAssignee(t, storyDir, "agent-1", board.StatusDevelopment, time.Now().UTC())
 
 	out := captureOutput(t, func() {
 		agentsAll = false
@@ -186,8 +186,8 @@ func TestChildProgressNoChildren(t *testing.T) {
 	boardDir = bd
 
 	// Assign agent to TASK-01 (a leaf task, no children)
-	taskDir := filepath.Join(bd, "EPIC-01_recording", "STORY-01_audio-capture", "TASK-01_interface")
-	writeAssignee(t, taskDir, "agent-leaf", board.StatusProgress, time.Now().UTC())
+	taskDir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture", testTask1ID+"_interface")
+	writeAssignee(t, taskDir, "agent-leaf", board.StatusDevelopment, time.Now().UTC())
 
 	agentsAll = false
 	out := captureOutput(t, func() {
@@ -198,7 +198,7 @@ func TestChildProgressNoChildren(t *testing.T) {
 	})
 
 	// Task has no children, should show its own status
-	if !strings.Contains(out, "progress") {
-		t.Fatalf("expected 'progress' for leaf task, got: %s", out)
+	if !strings.Contains(out, "development") {
+		t.Fatalf("expected 'development' for leaf task, got: %s", out)
 	}
 }

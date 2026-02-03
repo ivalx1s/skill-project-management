@@ -136,7 +136,7 @@ func TestRenderDOTMissingBinary(t *testing.T) {
 	t.Setenv("PATH", "")
 	defer os.Setenv("PATH", origPath)
 
-	err := RenderDOT("digraph{}", filepath.Join(t.TempDir(), "out.svg"), "svg")
+	err := RenderDOT("digraph{}", filepath.Join(t.TempDir(), "out.svg"), "svg", "")
 	if err == nil {
 		t.Fatal("expected error when dot binary is missing")
 	}
@@ -156,7 +156,7 @@ func TestRenderDOTDefaultFormat(t *testing.T) {
 	t.Setenv("PATH", "")
 	defer os.Setenv("PATH", origPath)
 
-	err := RenderDOT("digraph{}", filepath.Join(t.TempDir(), "out.svg"), "")
+	err := RenderDOT("digraph{}", filepath.Join(t.TempDir(), "out.svg"), "", "")
 	// We expect an error (no dot binary), just checking no panic.
 	if err == nil {
 		t.Log("dot binary unexpectedly available — that's fine")

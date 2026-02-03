@@ -10,16 +10,24 @@ import (
 // statusColor returns the fillcolor for a given element status.
 func statusColor(s board.Status) string {
 	switch s {
-	case board.StatusOpen:
-		return "#ffffff"
-	case board.StatusProgress:
-		return "#fff3cd"
+	case board.StatusBacklog:
+		return "#f5f5f5" // light grey
+	case board.StatusAnalysis:
+		return "#cce5ff" // light blue
+	case board.StatusToDev:
+		return "#ffffff" // white
+	case board.StatusDevelopment:
+		return "#fff3cd" // light yellow
+	case board.StatusToReview:
+		return "#ffd699" // orange
+	case board.StatusReviewing:
+		return "#ffeb99" // yellow
 	case board.StatusDone:
-		return "#d4edda"
+		return "#d4edda" // green
 	case board.StatusClosed:
-		return "#e2e3e5"
+		return "#6c757d" // dark grey
 	case board.StatusBlocked:
-		return "#f8d7da"
+		return "#f8d7da" // red
 	default:
 		return "#ffffff"
 	}
@@ -226,13 +234,17 @@ func writeLegend(b *strings.Builder) {
 	b.WriteString("    color=\"#999999\";\n")
 	b.WriteString("    fontname=\"Helvetica Bold\";\n")
 	b.WriteString("    fontsize=11;\n")
-	b.WriteString("    node [shape=box, style=filled, fontname=\"Helvetica\", fontsize=9, width=1.2];\n")
-	b.WriteString("    leg_open [label=\"open\", fillcolor=\"#ffffff\"];\n")
-	b.WriteString("    leg_progress [label=\"progress\", fillcolor=\"#fff3cd\"];\n")
+	b.WriteString("    node [shape=box, style=filled, fontname=\"Helvetica\", fontsize=9, width=1.0];\n")
+	b.WriteString("    leg_backlog [label=\"backlog\", fillcolor=\"#f5f5f5\"];\n")
+	b.WriteString("    leg_analysis [label=\"analysis\", fillcolor=\"#cce5ff\"];\n")
+	b.WriteString("    leg_todev [label=\"to-dev\", fillcolor=\"#ffffff\"];\n")
+	b.WriteString("    leg_dev [label=\"development\", fillcolor=\"#fff3cd\"];\n")
+	b.WriteString("    leg_toreview [label=\"to-review\", fillcolor=\"#ffd699\"];\n")
+	b.WriteString("    leg_reviewing [label=\"reviewing\", fillcolor=\"#ffeb99\"];\n")
 	b.WriteString("    leg_done [label=\"done\", fillcolor=\"#d4edda\"];\n")
 	b.WriteString("    leg_blocked [label=\"blocked\", fillcolor=\"#f8d7da\"];\n")
-	b.WriteString("    leg_closed [label=\"closed\", fillcolor=\"#e2e3e5\"];\n")
-	b.WriteString("    leg_open -> leg_progress -> leg_done [style=invis];\n")
+	b.WriteString("    leg_closed [label=\"closed\", fillcolor=\"#6c757d\", fontcolor=\"#ffffff\"];\n")
+	b.WriteString("    leg_backlog -> leg_analysis -> leg_todev -> leg_dev -> leg_toreview -> leg_reviewing -> leg_done [style=invis];\n")
 	b.WriteString("    leg_blocked -> leg_closed [style=invis];\n")
 	b.WriteString("  }\n")
 }
@@ -240,13 +252,15 @@ func writeLegend(b *strings.Builder) {
 func clusterBorderColor(s board.Status) string {
 	switch s {
 	case board.StatusDone:
-		return "#28a745"
-	case board.StatusProgress:
-		return "#ffc107"
+		return "#28a745" // green
+	case board.StatusDevelopment, board.StatusToReview, board.StatusReviewing:
+		return "#ffc107" // yellow (active work)
+	case board.StatusAnalysis:
+		return "#17a2b8" // blue (research)
 	case board.StatusBlocked:
-		return "#dc3545"
+		return "#dc3545" // red
 	default:
-		return "#6c757d"
+		return "#6c757d" // grey
 	}
 }
 

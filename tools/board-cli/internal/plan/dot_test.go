@@ -19,7 +19,7 @@ func makeElementWithStatus(typ board.ElementType, num int, name string, status b
 
 func TestGenerateDOTBasicStructure(t *testing.T) {
 	a := makeElementWithStatus(board.TaskType, 1, "interface", board.StatusDone)
-	b := makeElementWithStatus(board.TaskType, 2, "implementation", board.StatusProgress, "TASK-01")
+	b := makeElementWithStatus(board.TaskType, 2, "implementation", board.StatusDevelopment, "TASK-01")
 
 	elements := []*board.Element{a, b}
 	plan := BuildPlan(elements)
@@ -44,8 +44,8 @@ func TestGenerateDOTBasicStructure(t *testing.T) {
 }
 
 func TestGenerateDOTPhaseCluster(t *testing.T) {
-	a := makeElementWithStatus(board.TaskType, 1, "first", board.StatusOpen)
-	b := makeElementWithStatus(board.TaskType, 2, "second", board.StatusOpen, "TASK-01")
+	a := makeElementWithStatus(board.TaskType, 1, "first", board.StatusToDev)
+	b := makeElementWithStatus(board.TaskType, 2, "second", board.StatusToDev, "TASK-01")
 
 	elements := []*board.Element{a, b}
 	plan := BuildPlan(elements)
@@ -67,7 +67,7 @@ func TestGenerateDOTPhaseCluster(t *testing.T) {
 
 func TestGenerateDOTNodeLabels(t *testing.T) {
 	a := makeElementWithStatus(board.TaskType, 1, "interface", board.StatusDone)
-	b := makeElementWithStatus(board.StoryType, 5, "auth", board.StatusProgress)
+	b := makeElementWithStatus(board.StoryType, 5, "auth", board.StatusDevelopment)
 
 	elements := []*board.Element{a, b}
 	plan := BuildPlan(elements)
@@ -94,10 +94,10 @@ func TestGenerateDOTNodeColors(t *testing.T) {
 		status board.Status
 		color  string
 	}{
-		{board.StatusOpen, "#ffffff"},
-		{board.StatusProgress, "#fff3cd"},
+		{board.StatusToDev, "#ffffff"},
+		{board.StatusDevelopment, "#fff3cd"},
 		{board.StatusDone, "#d4edda"},
-		{board.StatusClosed, "#e2e3e5"},
+		{board.StatusClosed, "#6c757d"},
 		{board.StatusBlocked, "#f8d7da"},
 	}
 
@@ -118,8 +118,8 @@ func TestGenerateDOTNodeColors(t *testing.T) {
 
 func TestGenerateDOTEdges(t *testing.T) {
 	a := makeElementWithStatus(board.TaskType, 1, "first", board.StatusDone)
-	b := makeElementWithStatus(board.TaskType, 2, "second", board.StatusOpen, "TASK-01")
-	c := makeElementWithStatus(board.TaskType, 3, "third", board.StatusOpen, "TASK-01", "TASK-02")
+	b := makeElementWithStatus(board.TaskType, 2, "second", board.StatusToDev, "TASK-01")
+	c := makeElementWithStatus(board.TaskType, 3, "third", board.StatusToDev, "TASK-01", "TASK-02")
 
 	elements := []*board.Element{a, b, c}
 	plan := BuildPlan(elements)
@@ -139,7 +139,7 @@ func TestGenerateDOTEdges(t *testing.T) {
 func TestGenerateDOTEdgesOutOfScopeIgnored(t *testing.T) {
 	// b depends on TASK-99 which is not in scope — should not appear as edge.
 	a := makeElementWithStatus(board.TaskType, 1, "first", board.StatusDone)
-	b := makeElementWithStatus(board.TaskType, 2, "second", board.StatusOpen, "TASK-99", "TASK-01")
+	b := makeElementWithStatus(board.TaskType, 2, "second", board.StatusToDev, "TASK-99", "TASK-01")
 
 	elements := []*board.Element{a, b}
 	plan := BuildPlan(elements)
@@ -195,10 +195,10 @@ func TestStatusColor(t *testing.T) {
 		status board.Status
 		want   string
 	}{
-		{board.StatusOpen, "#ffffff"},
-		{board.StatusProgress, "#fff3cd"},
+		{board.StatusToDev, "#ffffff"},
+		{board.StatusDevelopment, "#fff3cd"},
 		{board.StatusDone, "#d4edda"},
-		{board.StatusClosed, "#e2e3e5"},
+		{board.StatusClosed, "#6c757d"},
 		{board.StatusBlocked, "#f8d7da"},
 		{board.Status("unknown"), "#ffffff"},
 	}

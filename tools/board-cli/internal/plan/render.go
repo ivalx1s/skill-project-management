@@ -9,18 +9,22 @@ import (
 	"github.com/aagrigore/task-board/internal/board"
 )
 
-// RenderDOT writes a DOT string to a temporary file, invokes the `dot` binary
+// RenderDOT writes a DOT string to a temporary file, invokes a Graphviz engine
 // to render it, and writes the output to outputPath.
 // format is the Graphviz output format (e.g. "svg", "png"). If empty, defaults to "svg".
-func RenderDOT(dot string, outputPath string, format string) error {
+// engine is the Graphviz layout engine (e.g. "dot", "neato", "fdp", "circo", "twopi"). If empty, defaults to "dot".
+func RenderDOT(dot string, outputPath string, format string, engine string) error {
 	if format == "" {
 		format = "svg"
 	}
+	if engine == "" {
+		engine = "dot"
+	}
 
-	// Check that dot binary is available.
-	dotBin, err := exec.LookPath("dot")
+	// Check that the engine binary is available.
+	engineBin, err := exec.LookPath(engine)
 	if err != nil {
-		return fmt.Errorf("graphviz 'dot' command not found: install graphviz (https://graphviz.org/download/) and ensure 'dot' is in your PATH")
+		return fmt.Errorf("graphviz '%s' command not found: install graphviz (https://graphviz.org/download/) and ensure '%s' is in your PATH", engine, engine)
 	}
 
 	// Write DOT to a temp file.
@@ -43,8 +47,8 @@ func RenderDOT(dot string, outputPath string, format string) error {
 		}
 	}
 
-	// Run: dot -T{format} -o {outputPath} {tmpFile}
-	cmd := exec.Command(dotBin, fmt.Sprintf("-T%s", format), "-o", outputPath, tmpFile.Name())
+	// Run: {engine} -T{format} -o {outputPath} {tmpFile}
+	cmd := exec.Command(engineBin, fmt.Sprintf("-T%s", format), "-o", outputPath, tmpFile.Name())
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("dot command failed: %w\n%s", err, string(output))
 	}

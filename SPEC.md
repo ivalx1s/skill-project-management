@@ -94,11 +94,15 @@ Format: type + ID on top, name on the bottom.
 - Bug = octagon
 
 **Node colors (status):**
-- white = open
-- yellow = progress
+- light grey = backlog
+- light blue = analysis
+- white = to-dev
+- light yellow = development
+- orange = to-review
+- yellow = reviewing
 - green = done
 - red = blocked
-- grey = closed
+- dark grey = closed
 
 **Legend:** every rendered graph includes a legend block explaining the color scheme.
 
@@ -187,7 +191,118 @@ STORY-01 → STORY-02 (2 phases)
 
 ---
 
-## Part 2: Sub-Agents (Agent Tracking)
+## Part 2: Status Lifecycle
+
+### Statuses
+
+Elements have 9 possible statuses:
+
+| # | Status | Meaning | Who sets |
+|---|--------|---------|----------|
+| 1 | **backlog** | Captured, no work yet | anyone |
+| 2 | **analysis** | Researching, decomposing, preparing | anyone |
+| 3 | **to-dev** | Ready for development | orchestrator |
+| 4 | **development** | Writing code | sub-agent |
+| 5 | **to-review** | Code ready, waiting for review | sub-agent |
+| 6 | **reviewing** | Orchestrator checking the work | orchestrator |
+| 7 | **done** | Reviewed and accepted | orchestrator |
+| 8 | **closed** | Won't do (with reason in notes) | anyone |
+| 9 | **blocked** | External block (with reason in notes) | anyone |
+
+### Status Flow
+
+**Happy path:**
+```
+backlog → analysis → to-dev → development → to-review → reviewing → done
+```
+
+**Returns from reviewing:**
+```
+reviewing → analysis   (need more research)
+reviewing → to-dev     (code issues, needs rework)
+```
+
+**Terminal from any status:**
+```
+any → closed    (won't do)
+any → blocked   (external block)
+```
+
+**Visual:**
+```
+                    ┌──────────────────────────────────┐
+                    ↓                                  │
+backlog → analysis → to-dev → development → to-review → reviewing → done
+             ↑                                              │
+             └──────────────────────────────────────────────┘
+
+any status → closed
+any status → blocked
+```
+
+### Blocked vs is_blocked
+
+Two different concepts:
+
+**blocked (status)** — explicit status for external blocks. Set manually when waiting on something outside the board (external API, other team, etc.). Reason goes in notes.
+
+**is_blocked (computed flag)** — computed from `blocked-by` dependencies. If element has a `blocked-by` dependency that is NOT `done` or `closed`, the element is automatically considered blocked. CLI prevents transition to `development` while `is_blocked` is true.
+
+Display in CLI:
+```
+TASK-05: to-dev [BLOCKED by TASK-02]     ← computed, dependency not done
+TASK-07: blocked                          ← explicit status, external reason
+```
+
+### Requirements
+
+#### R8: Auto-Promotion and Auto-Reopen
+
+The CLI automatically manages parent statuses to keep the board in sync.
+
+**Auto-promotion:** When all children of a story/epic are `done` or `closed`, the parent is automatically promoted to `done`. Cascades up the hierarchy (task → story → epic).
+
+```bash
+task-board progress status TASK-12 done
+# Output:
+# TASK-12 → done
+# STORY-05 → done (auto-promoted: all children done)
+# EPIC-01 → done (auto-promoted: all children done)
+```
+
+**Auto-reopen:** When a child is set to an active status (`to-dev`, `development`, etc.) and the parent is `done`/`closed`, the parent is automatically reopened. Cascades up the hierarchy.
+
+```bash
+task-board progress status TASK-12 to-dev
+# Output:
+# TASK-12 → to-dev
+# STORY-05 → development (auto-reopened: child active)
+# EPIC-01 → development (auto-reopened: child active)
+```
+
+#### R9: Dependency Blocking
+
+CLI enforces dependency constraints:
+
+```bash
+# TASK-13 blocked by TASK-12 (which is in to-dev)
+task-board progress status TASK-13 development
+# Error: cannot start TASK-13 — blocked by TASK-12 (status: to-dev)
+
+# After TASK-12 is done
+task-board progress status TASK-12 done
+task-board progress status TASK-13 development
+# OK: TASK-13 → development
+```
+
+**Rationale:**
+- No need to manually track/update blocked state
+- Board always reflects true state of work
+- Dependencies are enforced, not just documented
+
+---
+
+## Part 3: Sub-Agents (Agent Tracking)
 
 ### Overview
 

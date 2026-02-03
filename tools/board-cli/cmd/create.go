@@ -113,16 +113,12 @@ func createElement(elemType board.ElementType, name, description, parentID strin
 		parentDir = parent.Path
 	}
 
-	// Read and increment counter
-	counters, err := board.ReadCounters(boardDir)
-	if err != nil {
-		return err
-	}
-	num := counters.Increment(elemType)
+	// Generate distributed ID (YYMMDD-xxxxxx format)
+	id := board.GenerateID(elemType)
 
 	// Create directory
 	sanitized := board.SanitizeName(name)
-	dirName := fmt.Sprintf("%s-%02d_%s", elemType.Prefix(), num, sanitized)
+	dirName := fmt.Sprintf("%s_%s", id, sanitized)
 	elemPath := filepath.Join(parentDir, dirName)
 
 	if err := os.MkdirAll(elemPath, 0755); err != nil {
@@ -130,7 +126,7 @@ func createElement(elemType board.ElementType, name, description, parentID strin
 	}
 
 	// Render and write README.md
-	title := fmt.Sprintf("%s-%02d: %s", elemType.Prefix(), num, name)
+	title := fmt.Sprintf("%s: %s", id, name)
 	readmeContent, err := templates.RenderReadme(string(elemType), templates.TemplateData{
 		Title:       title,
 		Description: description,
@@ -159,12 +155,7 @@ func createElement(elemType board.ElementType, name, description, parentID strin
 		board.WriteProgressFile(progressPath, pd)
 	}
 
-	// Save counters
-	if err := board.WriteCounters(boardDir, counters); err != nil {
-		return fmt.Errorf("writing counters: %w", err)
-	}
-
-	fmt.Printf("Created %s-%02d: %s\n", elemType.Prefix(), num, name)
+	fmt.Printf("Created %s: %s\n", id, name)
 	fmt.Printf("  Path: %s\n", elemPath)
 	return nil
 }

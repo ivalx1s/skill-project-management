@@ -19,7 +19,7 @@ func TestShowCommand(t *testing.T) {
 	old := showCmd.OutOrStdout()
 	_ = old
 
-	err := runShow(showCmd, []string{"TASK-01"})
+	err := runShow(showCmd, []string{testTask1ID})
 	if err != nil {
 		t.Fatalf("runShow: %v", err)
 	}

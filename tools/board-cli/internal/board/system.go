@@ -10,6 +10,8 @@ import (
 )
 
 // Counters holds global auto-increment counters for each element type.
+// Deprecated: New elements use distributed IDs (YYMMDD-xxxxxx format).
+// Counters are kept for backward compatibility with old boards.
 type Counters struct {
 	Epic  int
 	Story int
@@ -115,14 +117,11 @@ func WriteCounters(boardDir string, c *Counters) error {
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
-// EnsureBoardDir creates the board directory and system.md if they don't exist.
+// EnsureBoardDir creates the board directory if it doesn't exist.
+// Note: system.md is no longer created for new boards (distributed IDs don't need counters).
 func EnsureBoardDir(boardDir string) error {
 	if err := os.MkdirAll(boardDir, 0755); err != nil {
 		return fmt.Errorf("creating board directory: %w", err)
-	}
-	path := SystemPath(boardDir)
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return WriteCounters(boardDir, &Counters{})
 	}
 	return nil
 }

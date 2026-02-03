@@ -31,13 +31,14 @@ func runSummary(cmd *cobra.Command, args []string) error {
 	}
 
 	// Count by type and status
+	// Group: TODO (backlog, to-dev), ACTIVE (analysis, development, to-review, reviewing), DONE, CLOSED, BLOCKED
 	type stats struct {
-		total    int
-		open     int
-		progress int
-		done     int
-		closed   int
-		blocked  int
+		total   int
+		todo    int // backlog + to-dev
+		active  int // analysis + development + to-review + reviewing
+		done    int
+		closed  int
+		blocked int
 	}
 
 	counts := map[board.ElementType]*stats{
@@ -51,10 +52,10 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		s := counts[e.Type]
 		s.total++
 		switch e.Status {
-		case board.StatusOpen:
-			s.open++
-		case board.StatusProgress:
-			s.progress++
+		case board.StatusBacklog, board.StatusToDev:
+			s.todo++
+		case board.StatusAnalysis, board.StatusDevelopment, board.StatusToReview, board.StatusReviewing:
+			s.active++
 		case board.StatusDone:
 			s.done++
 		case board.StatusClosed:
@@ -68,7 +69,7 @@ func runSummary(cmd *cobra.Command, args []string) error {
 	fmt.Println(output.Bold + "Board Summary" + output.Reset)
 	fmt.Println()
 
-	table := output.NewTable("TYPE", "TOTAL", "OPEN", "PROGRESS", "DONE", "CLOSED", "BLOCKED")
+	table := output.NewTable("TYPE", "TOTAL", "TODO", "ACTIVE", "DONE", "CLOSED", "BLOCKED")
 	for _, t := range []board.ElementType{board.EpicType, board.StoryType, board.TaskType, board.BugType} {
 		s := counts[t]
 		if s.total == 0 {
@@ -77,8 +78,8 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		table.AddRow(
 			string(t),
 			fmt.Sprintf("%d", s.total),
-			fmt.Sprintf("%d", s.open),
-			output.Yellow+fmt.Sprintf("%d", s.progress)+output.Reset,
+			fmt.Sprintf("%d", s.todo),
+			output.Yellow+fmt.Sprintf("%d", s.active)+output.Reset,
 			output.Green+fmt.Sprintf("%d", s.done)+output.Reset,
 			fmt.Sprintf("%d", s.closed),
 			output.Red+fmt.Sprintf("%d", s.blocked)+output.Reset,
@@ -86,25 +87,26 @@ func runSummary(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Print(table.String())
 
-	// In progress
-	var inProgress []*board.Element
+	// Active (analysis, development, to-review, reviewing)
+	var active []*board.Element
 	for _, e := range b.Elements {
-		if e.Status == board.StatusProgress {
-			inProgress = append(inProgress, e)
+		switch e.Status {
+		case board.StatusAnalysis, board.StatusDevelopment, board.StatusToReview, board.StatusReviewing:
+			active = append(active, e)
 		}
 	}
-	if len(inProgress) > 0 {
+	if len(active) > 0 {
 		fmt.Println()
-		fmt.Println(output.Bold + "In Progress" + output.Reset)
-		for _, e := range inProgress {
-			fmt.Printf("  %s %s (%s)\n", b.Ancestry(e), output.Gray+"—"+output.Reset, e.Name)
+		fmt.Println(output.Bold + "Active" + output.Reset)
+		for _, e := range active {
+			fmt.Printf("  %s %s (%s) [%s]\n", b.Ancestry(e), output.Gray+"—"+output.Reset, e.Name, e.Status)
 		}
 	}
 
-	// Blocked
+	// Blocked (explicit status or has active blockers)
 	var blocked []*board.Element
 	for _, e := range b.Elements {
-		if e.Status == board.StatusBlocked || len(e.BlockedBy) > 0 {
+		if e.Status == board.StatusBlocked || b.IsBlocked(e) {
 			blocked = append(blocked, e)
 		}
 	}
@@ -112,11 +114,16 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		fmt.Println(output.Bold + "Blocked" + output.Reset)
 		for _, e := range blocked {
-			blockers := strings.Join(e.BlockedBy, ", ")
-			if blockers == "" {
-				blockers = "(no blockers listed)"
+			if e.Status == board.StatusBlocked {
+				fmt.Printf("  %s %s blocked (external)\n", b.Ancestry(e), output.Gray+"—"+output.Reset)
+			} else {
+				activeBlockers := b.ActiveBlockers(e)
+				var blockerIDs []string
+				for _, blocker := range activeBlockers {
+					blockerIDs = append(blockerIDs, blocker.ID())
+				}
+				fmt.Printf("  %s %s blocked by: %s\n", b.Ancestry(e), output.Gray+"—"+output.Reset, strings.Join(blockerIDs, ", "))
 			}
-			fmt.Printf("  %s %s blocked by: %s\n", b.Ancestry(e), output.Gray+"—"+output.Reset, blockers)
 		}
 	}
 

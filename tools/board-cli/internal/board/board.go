@@ -45,6 +45,7 @@ func Load(boardDir string) (*Board, error) {
 		epic := &Element{
 			Type:   EpicType,
 			Number: num,
+			RawID:  ExtractRawID(entry.Name()),
 			Name:   name,
 			Path:   filepath.Join(boardDir, entry.Name()),
 		}
@@ -71,6 +72,7 @@ func Load(boardDir string) (*Board, error) {
 			story := &Element{
 				Type:     StoryType,
 				Number:   sn,
+				RawID:    ExtractRawID(se.Name()),
 				Name:     sname,
 				Path:     filepath.Join(epic.Path, se.Name()),
 				ParentID: epic.ID(),
@@ -98,6 +100,7 @@ func Load(boardDir string) (*Board, error) {
 				task := &Element{
 					Type:     tt,
 					Number:   tn,
+					RawID:    ExtractRawID(te.Name()),
 					Name:     tname,
 					Path:     filepath.Join(story.Path, te.Name()),
 					ParentID: story.ID(),
@@ -123,7 +126,7 @@ func loadElementDetails(e *Element) {
 		e.Blocks = pd.Blocks
 		e.Checklist = pd.Checklist
 	} else {
-		e.Status = StatusOpen
+		e.Status = StatusBacklog
 	}
 
 	// Load readme
@@ -136,11 +139,12 @@ func loadElementDetails(e *Element) {
 	}
 }
 
-// FindByID finds an element by its ID (e.g. "TASK-12").
+// FindByID finds an element by its ID (e.g. "TASK-260101-aaaaaa").
+// Comparison is case-insensitive.
 func (b *Board) FindByID(id string) *Element {
 	id = strings.ToUpper(id)
 	for _, e := range b.Elements {
-		if e.ID() == id {
+		if strings.ToUpper(e.ID()) == id {
 			return e
 		}
 	}
@@ -170,11 +174,12 @@ func FilterByStatus(elements []*Element, status Status) []*Element {
 }
 
 // FilterByParent filters elements by parent ID.
+// Comparison is case-insensitive.
 func FilterByParent(elements []*Element, parentID string) []*Element {
 	parentID = strings.ToUpper(parentID)
 	var result []*Element
 	for _, e := range elements {
-		if e.ParentID == parentID {
+		if strings.ToUpper(e.ParentID) == parentID {
 			result = append(result, e)
 		}
 	}
@@ -233,4 +238,24 @@ func (b *Board) Ancestry(e *Element) string {
 		current = b.FindByID(current.ParentID)
 	}
 	return strings.Join(parts, " > ")
+}
+
+// IsBlocked returns true if any of the element's blockedBy dependencies are not done/closed.
+func (b *Board) IsBlocked(e *Element) bool {
+	return len(b.ActiveBlockers(e)) > 0
+}
+
+// ActiveBlockers returns the list of blockers that are not done/closed.
+func (b *Board) ActiveBlockers(e *Element) []*Element {
+	var active []*Element
+	for _, blockerID := range e.BlockedBy {
+		blocker := b.FindByID(blockerID)
+		if blocker == nil {
+			continue // blocker not found, skip
+		}
+		if blocker.Status != StatusDone && blocker.Status != StatusClosed {
+			active = append(active, blocker)
+		}
+	}
+	return active
 }

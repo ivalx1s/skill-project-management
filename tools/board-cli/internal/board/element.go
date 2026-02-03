@@ -21,19 +21,31 @@ const (
 type Status string
 
 const (
-	StatusOpen     Status = "open"
-	StatusProgress Status = "progress"
-	StatusDone     Status = "done"
-	StatusClosed   Status = "closed"
-	StatusBlocked  Status = "blocked"
+	StatusBacklog     Status = "backlog"
+	StatusAnalysis    Status = "analysis"
+	StatusToDev       Status = "to-dev"
+	StatusDevelopment Status = "development"
+	StatusToReview    Status = "to-review"
+	StatusReviewing   Status = "reviewing"
+	StatusDone        Status = "done"
+	StatusClosed      Status = "closed"
+	StatusBlocked     Status = "blocked"
 )
 
 func ParseStatus(s string) (Status, error) {
 	switch strings.ToLower(s) {
-	case "open":
-		return StatusOpen, nil
-	case "progress":
-		return StatusProgress, nil
+	case "backlog":
+		return StatusBacklog, nil
+	case "analysis":
+		return StatusAnalysis, nil
+	case "to-dev", "todev":
+		return StatusToDev, nil
+	case "development", "dev":
+		return StatusDevelopment, nil
+	case "to-review", "toreview":
+		return StatusToReview, nil
+	case "reviewing", "review":
+		return StatusReviewing, nil
 	case "done":
 		return StatusDone, nil
 	case "closed":
@@ -41,7 +53,7 @@ func ParseStatus(s string) (Status, error) {
 	case "blocked":
 		return StatusBlocked, nil
 	default:
-		return "", fmt.Errorf("unknown status: %s (valid: open, progress, done, closed, blocked)", s)
+		return "", fmt.Errorf("unknown status: %s (valid: backlog, analysis, to-dev, development, to-review, reviewing, done, closed, blocked)", s)
 	}
 }
 
@@ -82,10 +94,11 @@ func (t ElementType) CounterKey() string {
 // Element represents a board element (epic, story, task, or bug).
 type Element struct {
 	Type      ElementType
-	Number    int
+	Number    int    // Deprecated: used for old sequential IDs
+	RawID     string // Full ID like "TASK-260101-aaaaaa"
 	Name      string
 	Path      string // absolute path to element directory
-	ParentID  string // e.g. "EPIC-01" for a story, "STORY-05" for a task
+	ParentID  string // e.g. "EPIC-260101-aaaaaa" for a story
 	Status     Status
 	AssignedTo string
 	CreatedAt  time.Time
@@ -105,14 +118,18 @@ type ChecklistItem struct {
 	Checked bool
 }
 
-// ID returns the element ID, e.g. "EPIC-01", "TASK-12".
+// ID returns the element ID, e.g. "EPIC-260101-aaaaaa" or "TASK-12" (legacy).
 func (e *Element) ID() string {
+	if e.RawID != "" {
+		return e.RawID
+	}
+	// Legacy fallback for old sequential IDs
 	return fmt.Sprintf("%s-%02d", e.Type.Prefix(), e.Number)
 }
 
-// DirName returns the directory name, e.g. "EPIC-01_recording".
+// DirName returns the directory name, e.g. "EPIC-260101-aaaaaa_recording".
 func (e *Element) DirName() string {
-	return fmt.Sprintf("%s-%02d_%s", e.Type.Prefix(), e.Number, e.Name)
+	return fmt.Sprintf("%s_%s", e.ID(), e.Name)
 }
 
 // ReadmePath returns the path to README.md.

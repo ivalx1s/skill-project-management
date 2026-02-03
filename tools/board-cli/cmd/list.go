@@ -65,9 +65,21 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	table := output.NewTable("ID", "STATUS", "NAME", "PARENT")
 	for _, e := range elements {
+		statusStr := output.ColorStatus(string(e.Status))
+		// Show [BLOCKED by X] if element has active blockers
+		if activeBlockers := b.ActiveBlockers(e); len(activeBlockers) > 0 {
+			var blockerIDs []string
+			for _, blocker := range activeBlockers {
+				blockerIDs = append(blockerIDs, blocker.ID())
+			}
+			statusStr += fmt.Sprintf(" %s[BLOCKED by %s]%s", output.Red, blockerIDs[0], output.Reset)
+			if len(blockerIDs) > 1 {
+				statusStr = statusStr[:len(statusStr)-len(output.Reset)] + fmt.Sprintf("+%d%s", len(blockerIDs)-1, output.Reset)
+			}
+		}
 		table.AddRow(
 			e.ID(),
-			output.ColorStatus(string(e.Status)),
+			statusStr,
 			e.Name,
 			e.ParentID,
 		)

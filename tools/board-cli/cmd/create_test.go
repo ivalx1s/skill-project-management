@@ -3,10 +3,27 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/aagrigore/task-board/internal/board"
 )
+
+// newIDPattern matches the new distributed ID format: TYPE-YYMMDD-xxxxxx
+var newIDDirPattern = regexp.MustCompile(`^(EPIC|STORY|TASK|BUG)-\d{6}-[0-9a-z]{6}_`)
+
+func findCreatedDir(parent string, prefix string) string {
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() && newIDDirPattern.MatchString(e.Name()) && e.Name()[:len(prefix)] == prefix {
+			return filepath.Join(parent, e.Name())
+		}
+	}
+	return ""
+}
 
 func TestCreateEpic(t *testing.T) {
 	dir := t.TempDir()
@@ -21,9 +38,9 @@ func TestCreateEpic(t *testing.T) {
 		t.Fatalf("runCreateEpic: %v", err)
 	}
 
-	// Verify directory exists
-	epicDir := filepath.Join(bd, "EPIC-01_test-epic")
-	if _, err := os.Stat(epicDir); os.IsNotExist(err) {
+	// Find created epic directory (new format)
+	epicDir := findCreatedDir(bd, "EPIC")
+	if epicDir == "" {
 		t.Fatal("epic directory not created")
 	}
 
@@ -36,15 +53,6 @@ func TestCreateEpic(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(epicDir, "progress.md")); os.IsNotExist(err) {
 		t.Fatal("progress.md not created")
 	}
-
-	// Verify counters
-	c, err := board.ReadCounters(bd)
-	if err != nil {
-		t.Fatalf("ReadCounters: %v", err)
-	}
-	if c.Epic != 1 {
-		t.Errorf("epic counter = %d, want 1", c.Epic)
-	}
 }
 
 func TestCreateStory(t *testing.T) {
@@ -53,26 +61,23 @@ func TestCreateStory(t *testing.T) {
 
 	createName = "new-story"
 	createDescription = "A new story"
-	createEpicFlag = "EPIC-01"
+	createEpicFlag = testEpic1ID
 
 	err := runCreateStory(createStoryCmd, nil)
 	if err != nil {
 		t.Fatalf("runCreateStory: %v", err)
 	}
 
-	// Counter should have incremented
-	c, err := board.ReadCounters(bd)
-	if err != nil {
-		t.Fatalf("ReadCounters: %v", err)
-	}
-	if c.Story != 4 {
-		t.Errorf("story counter = %d, want 4", c.Story)
+	// Find created story directory inside test epic
+	epicDir := filepath.Join(bd, testEpic1ID+"_recording")
+	storyDir := findCreatedDir(epicDir, "STORY")
+	if storyDir == "" {
+		t.Fatal("story directory not created")
 	}
 
-	// Verify directory
-	storyDir := filepath.Join(bd, "EPIC-01_recording", "STORY-04_new-story")
-	if _, err := os.Stat(storyDir); os.IsNotExist(err) {
-		t.Fatal("story directory not created")
+	// Verify README.md exists
+	if _, err := os.Stat(filepath.Join(storyDir, "README.md")); os.IsNotExist(err) {
+		t.Fatal("README.md not created")
 	}
 }
 
@@ -82,19 +87,36 @@ func TestCreateTask(t *testing.T) {
 
 	createName = "new-task"
 	createDescription = "A new task"
-	createStoryFlag = "STORY-01"
+	createStoryFlag = testStory1ID
 
 	err := runCreateTask(createTaskCmd, nil)
 	if err != nil {
 		t.Fatalf("runCreateTask: %v", err)
 	}
 
-	c, err := board.ReadCounters(bd)
-	if err != nil {
-		t.Fatalf("ReadCounters: %v", err)
+	// Find created task directory inside test story
+	storyDir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture")
+	taskDir := findCreatedDir(storyDir, "TASK")
+	if taskDir == "" {
+		t.Fatal("task directory not created")
 	}
-	if c.Task != 5 {
-		t.Errorf("task counter = %d, want 5", c.Task)
+
+	// Verify board can load the new element
+	b, err := board.Load(bd)
+	if err != nil {
+		t.Fatalf("board.Load: %v", err)
+	}
+
+	// Count tasks
+	taskCount := 0
+	for _, e := range b.Elements {
+		if e.Type == board.TaskType {
+			taskCount++
+		}
+	}
+	// Should have one more task than before (4 original + 1 new = 5)
+	if taskCount != 5 {
+		t.Errorf("task count = %d, want 5", taskCount)
 	}
 }
 
@@ -104,19 +126,29 @@ func TestCreateBug(t *testing.T) {
 
 	createName = "new-bug"
 	createDescription = "A new bug"
-	createStoryFlag = "STORY-01"
+	createStoryFlag = testStory1ID
 
 	err := runCreateBug(createBugCmd, nil)
 	if err != nil {
 		t.Fatalf("runCreateBug: %v", err)
 	}
 
-	c, err := board.ReadCounters(bd)
+	// Verify board can load the new bug
+	b, err := board.Load(bd)
 	if err != nil {
-		t.Fatalf("ReadCounters: %v", err)
+		t.Fatalf("board.Load: %v", err)
 	}
-	if c.Bug != 2 {
-		t.Errorf("bug counter = %d, want 2", c.Bug)
+
+	// Count bugs
+	bugCount := 0
+	for _, e := range b.Elements {
+		if e.Type == board.BugType {
+			bugCount++
+		}
+	}
+	// Should have 2 bugs now
+	if bugCount != 2 {
+		t.Errorf("bug count = %d, want 2", bugCount)
 	}
 }
 

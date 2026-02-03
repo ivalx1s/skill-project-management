@@ -10,10 +10,10 @@ import (
 func TestUnlink(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
-	unlinkBlockedBy = "TASK-01"
+	unlinkBlockedBy = testTask1ID
 
 	// TASK-02 is blocked by TASK-01
-	err := runUnlink(unlinkCmd, []string{"TASK-02"})
+	err := runUnlink(unlinkCmd, []string{testTask2ID})
 	if err != nil {
 		t.Fatalf("runUnlink: %v", err)
 	}
@@ -23,15 +23,15 @@ func TestUnlink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	task2 := b.FindByID("TASK-02")
+	task2 := b.FindByID(testTask2ID)
 	if len(task2.BlockedBy) > 0 {
 		t.Errorf("TASK-02 still blocked by: %v", task2.BlockedBy)
 	}
 
 	// Verify TASK-01 no longer blocks TASK-02
-	task1 := b.FindByID("TASK-01")
+	task1 := b.FindByID(testTask1ID)
 	for _, bid := range task1.Blocks {
-		if bid == "TASK-02" {
+		if bid == testTask2ID {
 			t.Error("TASK-01 still blocks TASK-02")
 		}
 	}
@@ -40,10 +40,10 @@ func TestUnlink(t *testing.T) {
 func TestUnlinkNotBlocked(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
-	unlinkBlockedBy = "TASK-03"
+	unlinkBlockedBy = testTask3ID
 
 	// TASK-01 is not blocked by TASK-03
-	err := runUnlink(unlinkCmd, []string{"TASK-01"})
+	err := runUnlink(unlinkCmd, []string{testTask1ID})
 	if err == nil {
 		t.Fatal("expected error for non-existent link")
 	}
@@ -55,7 +55,7 @@ func TestUnlinkNotBlocked(t *testing.T) {
 func TestUnlinkNotFound(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
-	unlinkBlockedBy = "TASK-01"
+	unlinkBlockedBy = testTask1ID
 
 	err := runUnlink(unlinkCmd, []string{"TASK-999"})
 	if err == nil {
@@ -68,8 +68,8 @@ func TestUnlinkDeescalatesCrossStory(t *testing.T) {
 	boardDir = bd
 
 	// First, create cross-epic link: TASK-04 blocked by TASK-01
-	linkBlockedBy = "TASK-01"
-	err := runLink(linkCmd, []string{"TASK-04"})
+	linkBlockedBy = testTask1ID
+	err := runLink(linkCmd, []string{testTask4ID})
 	if err != nil {
 		t.Fatalf("runLink: %v", err)
 	}
@@ -79,14 +79,14 @@ func TestUnlinkDeescalatesCrossStory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	story3 := b.FindByID("STORY-03")
+	story3 := b.FindByID(testStory3ID)
 	if len(story3.BlockedBy) == 0 {
 		t.Fatal("STORY-03 should be blocked after link")
 	}
 
 	// Now unlink
-	unlinkBlockedBy = "TASK-01"
-	err = runUnlink(unlinkCmd, []string{"TASK-04"})
+	unlinkBlockedBy = testTask1ID
+	err = runUnlink(unlinkCmd, []string{testTask4ID})
 	if err != nil {
 		t.Fatalf("runUnlink: %v", err)
 	}
@@ -96,17 +96,17 @@ func TestUnlinkDeescalatesCrossStory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	story3 = b.FindByID("STORY-03")
+	story3 = b.FindByID(testStory3ID)
 	for _, bid := range story3.BlockedBy {
-		if bid == "STORY-01" {
+		if bid == testStory1ID {
 			t.Error("STORY-03 still blocked by STORY-01 after de-escalation")
 		}
 	}
 
 	// EPIC-02 should no longer be blocked
-	epic2 := b.FindByID("EPIC-02")
+	epic2 := b.FindByID(testEpic2ID)
 	for _, bid := range epic2.BlockedBy {
-		if bid == "EPIC-01" {
+		if bid == testEpic1ID {
 			t.Error("EPIC-02 still blocked by EPIC-01 after de-escalation")
 		}
 	}
@@ -121,18 +121,18 @@ func TestUnlinkKeepsEscalationWhenOtherCrossLinksExist(t *testing.T) {
 	// So we need another task in STORY-02 for this test.
 	// Actually, let's use cross-epic: TASK-04 (STORY-03/EPIC-02) blocked by TASK-01 AND TASK-02
 
-	linkBlockedBy = "TASK-01"
-	if err := runLink(linkCmd, []string{"TASK-04"}); err != nil {
+	linkBlockedBy = testTask1ID
+	if err := runLink(linkCmd, []string{testTask4ID}); err != nil {
 		t.Fatalf("link1: %v", err)
 	}
-	linkBlockedBy = "TASK-02"
-	if err := runLink(linkCmd, []string{"TASK-04"}); err != nil {
+	linkBlockedBy = testTask2ID
+	if err := runLink(linkCmd, []string{testTask4ID}); err != nil {
 		t.Fatalf("link2: %v", err)
 	}
 
 	// Remove one link — escalation should stay (TASK-04 still blocked by TASK-02)
-	unlinkBlockedBy = "TASK-01"
-	if err := runUnlink(unlinkCmd, []string{"TASK-04"}); err != nil {
+	unlinkBlockedBy = testTask1ID
+	if err := runUnlink(unlinkCmd, []string{testTask4ID}); err != nil {
 		t.Fatalf("unlink: %v", err)
 	}
 
@@ -142,10 +142,10 @@ func TestUnlinkKeepsEscalationWhenOtherCrossLinksExist(t *testing.T) {
 	}
 
 	// STORY-03 should STILL be blocked by STORY-01 (TASK-04 still blocked by TASK-02 which is in STORY-01)
-	story3 := b.FindByID("STORY-03")
+	story3 := b.FindByID(testStory3ID)
 	foundStory := false
 	for _, bid := range story3.BlockedBy {
-		if bid == "STORY-01" {
+		if bid == testStory1ID {
 			foundStory = true
 		}
 	}

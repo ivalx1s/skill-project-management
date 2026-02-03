@@ -11,7 +11,7 @@ func TestProgressStatusSet(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
 
-	err := runProgressStatus(progressStatusCmd, []string{"TASK-03", "progress"})
+	err := runProgressStatus(progressStatusCmd, []string{testTask3ID, "development"})
 	if err != nil {
 		t.Fatalf("runProgressStatus: %v", err)
 	}
@@ -20,9 +20,9 @@ func TestProgressStatusSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	task3 := b.FindByID("TASK-03")
-	if task3.Status != board.StatusProgress {
-		t.Errorf("TASK-03 status = %v, want progress", task3.Status)
+	task3 := b.FindByID(testTask3ID)
+	if task3.Status != board.StatusDevelopment {
+		t.Errorf("TASK-03 status = %v, want development", task3.Status)
 	}
 }
 
@@ -30,8 +30,8 @@ func TestProgressStatusBlockedPrevented(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
 
-	// TASK-02 is blocked by TASK-01 (which is open)
-	err := runProgressStatus(progressStatusCmd, []string{"TASK-02", "progress"})
+	// TASK-02 is blocked by TASK-01 (which is to-dev)
+	err := runProgressStatus(progressStatusCmd, []string{testTask2ID, "development"})
 	if err == nil {
 		t.Fatal("expected error for blocked element")
 	}
@@ -45,7 +45,7 @@ func TestProgressCheckAndUncheck(t *testing.T) {
 	boardDir = bd
 
 	// Check item 1 of TASK-01
-	err := toggleChecklistItem("TASK-01", "1", true)
+	err := toggleChecklistItem(testTask1ID, "1", true)
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
@@ -54,14 +54,14 @@ func TestProgressCheckAndUncheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	task1 := b.FindByID("TASK-01")
+	task1 := b.FindByID(testTask1ID)
 	if !task1.Checklist[0].Checked {
 		t.Error("item 1 should be checked")
 	}
 
 	// Uncheck item 2
 	boardDir = bd
-	err = toggleChecklistItem("TASK-01", "2", false)
+	err = toggleChecklistItem(testTask1ID, "2", false)
 	if err != nil {
 		t.Fatalf("uncheck: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestProgressCheckAndUncheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	task1 = b.FindByID("TASK-01")
+	task1 = b.FindByID(testTask1ID)
 	if task1.Checklist[1].Checked {
 		t.Error("item 2 should be unchecked")
 	}
@@ -80,7 +80,7 @@ func TestProgressCheckOutOfRange(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
 
-	err := toggleChecklistItem("TASK-01", "99", true)
+	err := toggleChecklistItem(testTask1ID, "99", true)
 	if err == nil {
 		t.Fatal("expected error for out of range")
 	}
@@ -90,7 +90,7 @@ func TestProgressAddItem(t *testing.T) {
 	bd := setupTestBoard(t)
 	boardDir = bd
 
-	err := runProgressAddItem(progressAddItemCmd, []string{"TASK-01", "New step"})
+	err := runProgressAddItem(progressAddItemCmd, []string{testTask1ID, "New step"})
 	if err != nil {
 		t.Fatalf("runProgressAddItem: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestProgressAddItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	task1 := b.FindByID("TASK-01")
+	task1 := b.FindByID(testTask1ID)
 	if len(task1.Checklist) != 3 {
 		t.Errorf("checklist len = %d, want 3", len(task1.Checklist))
 	}

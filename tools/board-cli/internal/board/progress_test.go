@@ -6,7 +6,7 @@ import (
 
 func TestParseProgress(t *testing.T) {
 	content := `## Status
-progress
+development
 
 ## Blocked By
 - TASK-12
@@ -29,8 +29,8 @@ Some notes here
 		t.Fatal(err)
 	}
 
-	if pd.Status != StatusProgress {
-		t.Errorf("Status = %v, want progress", pd.Status)
+	if pd.Status != StatusDevelopment {
+		t.Errorf("Status = %v, want development", pd.Status)
 	}
 
 	if len(pd.BlockedBy) != 2 {
@@ -64,7 +64,7 @@ Some notes here
 
 func TestParseProgressEmpty(t *testing.T) {
 	content := `## Status
-open
+to-dev
 
 ## Blocked By
 - (none)
@@ -82,8 +82,8 @@ open
 		t.Fatal(err)
 	}
 
-	if pd.Status != StatusOpen {
-		t.Errorf("Status = %v, want open", pd.Status)
+	if pd.Status != StatusToDev {
+		t.Errorf("Status = %v, want to-dev", pd.Status)
 	}
 	if len(pd.BlockedBy) != 0 {
 		t.Errorf("BlockedBy = %v, want empty", pd.BlockedBy)
@@ -98,7 +98,7 @@ open
 
 func TestWriteProgress(t *testing.T) {
 	pd := &ProgressData{
-		Status:    StatusProgress,
+		Status:    StatusDevelopment,
 		BlockedBy: []string{"TASK-12"},
 		Blocks:    []string{"TASK-20"},
 		Checklist: []ChecklistItem{
@@ -116,7 +116,7 @@ func TestWriteProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if pd2.Status != StatusProgress {
+	if pd2.Status != StatusDevelopment {
 		t.Errorf("Status = %v", pd2.Status)
 	}
 	if len(pd2.BlockedBy) != 1 || pd2.BlockedBy[0] != "TASK-12" {

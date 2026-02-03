@@ -1,5 +1,5 @@
 ## Counters
-- epic: 10
-- story: 19
-- task: 60
+- epic: 13
+- story: 26
+- task: 78
 - bug: 1

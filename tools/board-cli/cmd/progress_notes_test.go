@@ -12,7 +12,7 @@ func TestProgressNotesAppend(t *testing.T) {
 	progressNotesSet = false
 
 	// TASK-01 already has notes "Started work"
-	err := runProgressNotes(progressNotesCmd, []string{"TASK-01", "More work done"})
+	err := runProgressNotes(progressNotesCmd, []string{testTask1ID, "More work done"})
 	if err != nil {
 		t.Fatalf("runProgressNotes: %v", err)
 	}
@@ -21,7 +21,7 @@ func TestProgressNotesAppend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	elem := b.FindByID("TASK-01")
+	elem := b.FindByID(testTask1ID)
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
 		t.Fatalf("ParseProgressFile: %v", err)
@@ -38,7 +38,7 @@ func TestProgressNotesSet(t *testing.T) {
 	progressNotesSet = true
 	defer func() { progressNotesSet = false }()
 
-	err := runProgressNotes(progressNotesCmd, []string{"TASK-01", "Replaced notes"})
+	err := runProgressNotes(progressNotesCmd, []string{testTask1ID, "Replaced notes"})
 	if err != nil {
 		t.Fatalf("runProgressNotes: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestProgressNotesSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	elem := b.FindByID("TASK-01")
+	elem := b.FindByID(testTask1ID)
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
 		t.Fatalf("ParseProgressFile: %v", err)
@@ -64,7 +64,7 @@ func TestProgressNotesEmpty(t *testing.T) {
 	progressNotesSet = false
 
 	// TASK-03 has no notes
-	err := runProgressNotes(progressNotesCmd, []string{"TASK-03", "First note"})
+	err := runProgressNotes(progressNotesCmd, []string{testTask3ID, "First note"})
 	if err != nil {
 		t.Fatalf("runProgressNotes: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestProgressNotesEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	elem := b.FindByID("TASK-03")
+	elem := b.FindByID(testTask3ID)
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
 		t.Fatalf("ParseProgressFile: %v", err)

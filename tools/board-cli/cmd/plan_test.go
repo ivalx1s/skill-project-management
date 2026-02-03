@@ -54,10 +54,10 @@ func TestPlanNoArgs(t *testing.T) {
 	if !strings.Contains(out, "Plan: Project") {
 		t.Errorf("expected 'Plan: Project' in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "EPIC-01") {
+	if !strings.Contains(out, testEpic1ID) {
 		t.Errorf("expected EPIC-01 in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "EPIC-02") {
+	if !strings.Contains(out, testEpic2ID) {
 		t.Errorf("expected EPIC-02 in output, got:\n%s", out)
 	}
 	if !strings.Contains(out, "Phase 1") {
@@ -71,16 +71,16 @@ func TestPlanEpic(t *testing.T) {
 	resetPlanFlags()
 
 	out := captureOutput(t, func() {
-		err := runPlan(planCmd, []string{"EPIC-01"})
+		err := runPlan(planCmd, []string{testEpic1ID})
 		if err != nil {
 			t.Fatalf("runPlan EPIC-01: %v", err)
 		}
 	})
 
-	if !strings.Contains(out, "STORY-01") {
+	if !strings.Contains(out, testStory1ID) {
 		t.Errorf("expected STORY-01 in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "STORY-02") {
+	if !strings.Contains(out, testStory2ID) {
 		t.Errorf("expected STORY-02 in output, got:\n%s", out)
 	}
 }
@@ -91,17 +91,17 @@ func TestPlanStory(t *testing.T) {
 	resetPlanFlags()
 
 	out := captureOutput(t, func() {
-		err := runPlan(planCmd, []string{"STORY-01"})
+		err := runPlan(planCmd, []string{testStory1ID})
 		if err != nil {
 			t.Fatalf("runPlan STORY-01: %v", err)
 		}
 	})
 
 	// STORY-01 has tasks: TASK-01, TASK-02 (blocked by TASK-01), TASK-03, BUG-01
-	if !strings.Contains(out, "TASK-01") {
+	if !strings.Contains(out, testTask1ID) {
 		t.Errorf("expected TASK-01 in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "TASK-02") {
+	if !strings.Contains(out, testTask2ID) {
 		t.Errorf("expected TASK-02 in output, got:\n%s", out)
 	}
 	// TASK-02 is blocked by TASK-01, so there should be Phase 2
@@ -112,7 +112,7 @@ func TestPlanStory(t *testing.T) {
 	if !strings.Contains(out, "Critical Path") {
 		t.Errorf("expected 'Critical Path' in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "TASK-01") && !strings.Contains(out, "TASK-02") {
+	if !strings.Contains(out, testTask1ID) && !strings.Contains(out, testTask2ID) {
 		t.Errorf("expected critical path with TASK-01 and TASK-02, got:\n%s", out)
 	}
 }
@@ -166,14 +166,14 @@ func TestPlanSaveEpic(t *testing.T) {
 	planSave = true
 
 	out := captureOutput(t, func() {
-		err := runPlan(planCmd, []string{"EPIC-01"})
+		err := runPlan(planCmd, []string{testEpic1ID})
 		if err != nil {
 			t.Fatalf("runPlan --save EPIC-01: %v", err)
 		}
 	})
 
 	// plan.md should be in the epic's directory
-	epicDir := filepath.Join(bd, "EPIC-01_recording")
+	epicDir := filepath.Join(bd, testEpic1ID+"_recording")
 	planPath := filepath.Join(epicDir, "plan.md")
 	if _, err := os.Stat(planPath); os.IsNotExist(err) {
 		t.Fatalf("plan.md not created at %s (output: %s)", planPath, out)
@@ -184,7 +184,7 @@ func TestPlanSaveEpic(t *testing.T) {
 		t.Fatalf("reading plan.md: %v", err)
 	}
 
-	if !strings.Contains(string(content), "EPIC-01") {
+	if !strings.Contains(string(content), testEpic1ID) {
 		t.Errorf("plan.md should reference EPIC-01, got:\n%s", string(content))
 	}
 }
@@ -196,13 +196,13 @@ func TestPlanSaveStory(t *testing.T) {
 	planSave = true
 
 	out := captureOutput(t, func() {
-		err := runPlan(planCmd, []string{"STORY-01"})
+		err := runPlan(planCmd, []string{testStory1ID})
 		if err != nil {
 			t.Fatalf("runPlan --save STORY-01: %v", err)
 		}
 	})
 
-	storyDir := filepath.Join(bd, "EPIC-01_recording", "STORY-01_audio-capture")
+	storyDir := filepath.Join(bd, testEpic1ID+"_recording", testStory1ID+"_audio-capture")
 	planPath := filepath.Join(storyDir, "plan.md")
 	if _, err := os.Stat(planPath); os.IsNotExist(err) {
 		t.Fatalf("plan.md not created at %s (output: %s)", planPath, out)
@@ -216,7 +216,7 @@ func TestPlanCriticalPathFlag(t *testing.T) {
 	planCriticalPath = true
 
 	out := captureOutput(t, func() {
-		err := runPlan(planCmd, []string{"STORY-01"})
+		err := runPlan(planCmd, []string{testStory1ID})
 		if err != nil {
 			t.Fatalf("runPlan --critical-path: %v", err)
 		}
@@ -238,7 +238,7 @@ func TestPlanPhaseFlag(t *testing.T) {
 	planPhase = 1
 
 	out := captureOutput(t, func() {
-		err := runPlan(planCmd, []string{"STORY-01"})
+		err := runPlan(planCmd, []string{testStory1ID})
 		if err != nil {
 			t.Fatalf("runPlan --phase 1: %v", err)
 		}
@@ -263,37 +263,41 @@ func TestPlanCycleDetection(t *testing.T) {
 	bd := filepath.Join(dir, ".task-board")
 	os.MkdirAll(bd, 0755)
 
-	board.WriteCounters(bd, &board.Counters{Epic: 1, Story: 1, Task: 2, Bug: 0})
+	// Local IDs for this test
+	cycleEpicID := "EPIC-260101-cycle1"
+	cycleStoryID := "STORY-260101-cycle2"
+	cycleTask1ID := "TASK-260101-cycle3"
+	cycleTask2ID := "TASK-260101-cycle4"
 
-	epicDir := filepath.Join(bd, "EPIC-01_cycle-test")
+	epicDir := filepath.Join(bd, cycleEpicID+"_cycle-test")
 	os.MkdirAll(epicDir, 0755)
 	os.WriteFile(filepath.Join(epicDir, "README.md"),
-		[]byte("# EPIC-01: Cycle Test\n\n## Description\nTest\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
+		[]byte("# "+cycleEpicID+": Cycle Test\n\n## Description\nTest\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
 	os.WriteFile(filepath.Join(epicDir, "progress.md"),
-		[]byte("## Status\nopen\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
+		[]byte("## Status\nbacklog\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
-	storyDir := filepath.Join(epicDir, "STORY-01_cycle-story")
+	storyDir := filepath.Join(epicDir, cycleStoryID+"_cycle-story")
 	os.MkdirAll(storyDir, 0755)
 	os.WriteFile(filepath.Join(storyDir, "README.md"),
-		[]byte("# STORY-01: Cycle Story\n\n## Description\nTest\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
+		[]byte("# "+cycleStoryID+": Cycle Story\n\n## Description\nTest\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
 	os.WriteFile(filepath.Join(storyDir, "progress.md"),
-		[]byte("## Status\nopen\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
+		[]byte("## Status\nbacklog\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
-	// TASK-01 blocked by TASK-02
-	task1Dir := filepath.Join(storyDir, "TASK-01_alpha")
+	// TASK-A blocked by TASK-B
+	task1Dir := filepath.Join(storyDir, cycleTask1ID+"_alpha")
 	os.MkdirAll(task1Dir, 0755)
 	os.WriteFile(filepath.Join(task1Dir, "README.md"),
-		[]byte("# TASK-01: Alpha\n\n## Description\nTest\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
+		[]byte("# "+cycleTask1ID+": Alpha\n\n## Description\nTest\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
 	os.WriteFile(filepath.Join(task1Dir, "progress.md"),
-		[]byte("## Status\nopen\n\n## Blocked By\n- TASK-02\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
+		[]byte("## Status\nbacklog\n\n## Blocked By\n- "+cycleTask2ID+"\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
-	// TASK-02 blocked by TASK-01
-	task2Dir := filepath.Join(storyDir, "TASK-02_beta")
+	// TASK-B blocked by TASK-A
+	task2Dir := filepath.Join(storyDir, cycleTask2ID+"_beta")
 	os.MkdirAll(task2Dir, 0755)
 	os.WriteFile(filepath.Join(task2Dir, "README.md"),
-		[]byte("# TASK-02: Beta\n\n## Description\nTest\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
+		[]byte("# "+cycleTask2ID+": Beta\n\n## Description\nTest\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
 	os.WriteFile(filepath.Join(task2Dir, "progress.md"),
-		[]byte("## Status\nopen\n\n## Blocked By\n- TASK-01\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
+		[]byte("## Status\nbacklog\n\n## Blocked By\n- "+cycleTask1ID+"\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
 	boardDir = bd
 	resetPlanFlags()
@@ -304,7 +308,7 @@ func TestPlanCycleDetection(t *testing.T) {
 		t.Fatalf("loading board: %v", err)
 	}
 
-	elements, err := plan.ScopeElements(b, "STORY-01")
+	elements, err := plan.ScopeElements(b, cycleStoryID)
 	if err != nil {
 		t.Fatalf("scope elements: %v", err)
 	}
@@ -320,15 +324,26 @@ func TestPlanCycleDetection(t *testing.T) {
 	// Verify cycle nodes contain both tasks
 	cycleSet := make(map[string]bool)
 	for _, id := range p.CycleNodes {
-		cycleSet[id] = true
+		cycleSet[strings.ToUpper(id)] = true
 	}
-	if !cycleSet["TASK-01"] || !cycleSet["TASK-02"] {
-		t.Errorf("expected TASK-01 and TASK-02 in cycle nodes, got: %v", p.CycleNodes)
+	if !cycleSet[strings.ToUpper(cycleTask1ID)] || !cycleSet[strings.ToUpper(cycleTask2ID)] {
+		t.Errorf("expected cycle tasks in cycle nodes, got: %v", p.CycleNodes)
 	}
 }
 
+// Mixed status board IDs (local to these tests)
+const (
+	mixedEpic1ID  = "EPIC-260101-mix001"
+	mixedEpic2ID  = "EPIC-260101-mix002"
+	mixedStory1ID = "STORY-260101-mix003"
+	mixedTask1ID  = "TASK-260101-mix004"
+	mixedTask2ID  = "TASK-260101-mix005"
+	mixedTask3ID  = "TASK-260101-mix006"
+	mixedTask4ID  = "TASK-260101-mix007"
+)
+
 // setupMixedStatusBoard creates a board with elements in various statuses:
-//   - EPIC-01 (progress) -> STORY-01 (open) -> TASK-01 (done), TASK-02 (open), TASK-03 (closed), TASK-04 (blocked)
+//   - EPIC-01 (development) -> STORY-01 (backlog) -> TASK-01 (done), TASK-02 (backlog), TASK-03 (closed), TASK-04 (blocked)
 //   - EPIC-02 (done)
 //
 // Used for testing the --active filter.
@@ -338,61 +353,59 @@ func setupMixedStatusBoard(t *testing.T) string {
 	bd := filepath.Join(dir, ".task-board")
 	os.MkdirAll(bd, 0755)
 
-	board.WriteCounters(bd, &board.Counters{Epic: 2, Story: 1, Task: 4, Bug: 0})
-
-	// EPIC-01 (progress)
-	epicDir := filepath.Join(bd, "EPIC-01_active-epic")
+	// EPIC-01 (development)
+	epicDir := filepath.Join(bd, mixedEpic1ID+"_active-epic")
 	os.MkdirAll(epicDir, 0755)
 	os.WriteFile(filepath.Join(epicDir, "README.md"),
-		[]byte("# EPIC-01: Active Epic\n\n## Description\nActive\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Works\n"), 0644)
+		[]byte("# "+mixedEpic1ID+": Active Epic\n\n## Description\nActive\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Works\n"), 0644)
 	os.WriteFile(filepath.Join(epicDir, "progress.md"),
-		[]byte("## Status\nprogress\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
+		[]byte("## Status\ndevelopment\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
 	// EPIC-02 (done)
-	epic2Dir := filepath.Join(bd, "EPIC-02_done-epic")
+	epic2Dir := filepath.Join(bd, mixedEpic2ID+"_done-epic")
 	os.MkdirAll(epic2Dir, 0755)
 	os.WriteFile(filepath.Join(epic2Dir, "README.md"),
-		[]byte("# EPIC-02: Done Epic\n\n## Description\nFinished\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Done\n"), 0644)
+		[]byte("# "+mixedEpic2ID+": Done Epic\n\n## Description\nFinished\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Done\n"), 0644)
 	os.WriteFile(filepath.Join(epic2Dir, "progress.md"),
 		[]byte("## Status\ndone\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
-	// STORY-01 (open) inside EPIC-01
-	storyDir := filepath.Join(epicDir, "STORY-01_mixed-story")
+	// STORY-01 (backlog) inside EPIC-01
+	storyDir := filepath.Join(epicDir, mixedStory1ID+"_mixed-story")
 	os.MkdirAll(storyDir, 0755)
 	os.WriteFile(filepath.Join(storyDir, "README.md"),
-		[]byte("# STORY-01: Mixed Story\n\n## Description\nMixed statuses\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
+		[]byte("# "+mixedStory1ID+": Mixed Story\n\n## Description\nMixed statuses\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Test\n"), 0644)
 	os.WriteFile(filepath.Join(storyDir, "progress.md"),
-		[]byte("## Status\nopen\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
+		[]byte("## Status\nbacklog\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
 	// TASK-01 (done) inside STORY-01
-	task1Dir := filepath.Join(storyDir, "TASK-01_done-task")
+	task1Dir := filepath.Join(storyDir, mixedTask1ID+"_done-task")
 	os.MkdirAll(task1Dir, 0755)
 	os.WriteFile(filepath.Join(task1Dir, "README.md"),
-		[]byte("# TASK-01: Done Task\n\n## Description\nCompleted\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Done\n"), 0644)
+		[]byte("# "+mixedTask1ID+": Done Task\n\n## Description\nCompleted\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Done\n"), 0644)
 	os.WriteFile(filepath.Join(task1Dir, "progress.md"),
-		[]byte("## Status\ndone\n\n## Blocked By\n- (none)\n\n## Blocks\n- TASK-02\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
+		[]byte("## Status\ndone\n\n## Blocked By\n- (none)\n\n## Blocks\n- "+mixedTask2ID+"\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
-	// TASK-02 (open) inside STORY-01, blocked by TASK-01
-	task2Dir := filepath.Join(storyDir, "TASK-02_open-task")
+	// TASK-02 (backlog) inside STORY-01, blocked by TASK-01
+	task2Dir := filepath.Join(storyDir, mixedTask2ID+"_open-task")
 	os.MkdirAll(task2Dir, 0755)
 	os.WriteFile(filepath.Join(task2Dir, "README.md"),
-		[]byte("# TASK-02: Open Task\n\n## Description\nStill open\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Open\n"), 0644)
+		[]byte("# "+mixedTask2ID+": Open Task\n\n## Description\nStill open\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Open\n"), 0644)
 	os.WriteFile(filepath.Join(task2Dir, "progress.md"),
-		[]byte("## Status\nopen\n\n## Blocked By\n- TASK-01\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
+		[]byte("## Status\nbacklog\n\n## Blocked By\n- "+mixedTask1ID+"\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
 	// TASK-03 (closed) inside STORY-01
-	task3Dir := filepath.Join(storyDir, "TASK-03_closed-task")
+	task3Dir := filepath.Join(storyDir, mixedTask3ID+"_closed-task")
 	os.MkdirAll(task3Dir, 0755)
 	os.WriteFile(filepath.Join(task3Dir, "README.md"),
-		[]byte("# TASK-03: Closed Task\n\n## Description\nClosed\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Closed\n"), 0644)
+		[]byte("# "+mixedTask3ID+": Closed Task\n\n## Description\nClosed\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Closed\n"), 0644)
 	os.WriteFile(filepath.Join(task3Dir, "progress.md"),
 		[]byte("## Status\nclosed\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
 	// TASK-04 (blocked) inside STORY-01
-	task4Dir := filepath.Join(storyDir, "TASK-04_blocked-task")
+	task4Dir := filepath.Join(storyDir, mixedTask4ID+"_blocked-task")
 	os.MkdirAll(task4Dir, 0755)
 	os.WriteFile(filepath.Join(task4Dir, "README.md"),
-		[]byte("# TASK-04: Blocked Task\n\n## Description\nBlocked\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Blocked\n"), 0644)
+		[]byte("# "+mixedTask4ID+": Blocked Task\n\n## Description\nBlocked\n\n## Scope\ntest\n\n## Acceptance Criteria\n- Blocked\n"), 0644)
 	os.WriteFile(filepath.Join(task4Dir, "progress.md"),
 		[]byte("## Status\nblocked\n\n## Blocked By\n- (none)\n\n## Blocks\n- (none)\n\n## Checklist\n(empty)\n\n## Notes\n"), 0644)
 
@@ -401,8 +414,8 @@ func setupMixedStatusBoard(t *testing.T) string {
 
 func TestActiveFilterRemovesDoneAndClosed(t *testing.T) {
 	elements := []*board.Element{
-		{Title: "Open Task", Status: board.StatusOpen},
-		{Title: "Progress Task", Status: board.StatusProgress},
+		{Title: "Open Task", Status: board.StatusToDev},
+		{Title: "Progress Task", Status: board.StatusDevelopment},
 		{Title: "Done Task", Status: board.StatusDone},
 		{Title: "Closed Task", Status: board.StatusClosed},
 		{Title: "Blocked Task", Status: board.StatusBlocked},
@@ -459,8 +472,8 @@ func TestActiveFilterAllDone(t *testing.T) {
 
 func TestActiveFilterNoneDone(t *testing.T) {
 	elements := []*board.Element{
-		{Title: "Open 1", Status: board.StatusOpen},
-		{Title: "Progress 1", Status: board.StatusProgress},
+		{Title: "Open 1", Status: board.StatusToDev},
+		{Title: "Progress 1", Status: board.StatusDevelopment},
 	}
 
 	result := filterActiveElements(elements)
@@ -481,7 +494,7 @@ func TestActiveRenderHierarchyExcludesDone(t *testing.T) {
 	}
 
 	// Simulate what renderGraph does for hierarchy layout with --active
-	allElements, err := plan.AllDescendants(b, "EPIC-01")
+	allElements, err := plan.AllDescendants(b, mixedEpic1ID)
 	if err != nil {
 		t.Fatalf("AllDescendants: %v", err)
 	}
@@ -498,35 +511,35 @@ func TestActiveRenderHierarchyExcludesDone(t *testing.T) {
 	// Verify TASK-01 (done) and TASK-03 (closed) are not present
 	ids := make(map[string]bool)
 	for _, e := range filtered {
-		ids[e.ID()] = true
+		ids[strings.ToUpper(e.ID())] = true
 	}
-	if ids["TASK-01"] {
+	if ids[strings.ToUpper(mixedTask1ID)] {
 		t.Error("TASK-01 (done) should be excluded by --active filter")
 	}
-	if ids["TASK-03"] {
+	if ids[strings.ToUpper(mixedTask3ID)] {
 		t.Error("TASK-03 (closed) should be excluded by --active filter")
 	}
 
 	// Verify active elements are still present
-	if !ids["TASK-02"] {
+	if !ids[strings.ToUpper(mixedTask2ID)] {
 		t.Error("TASK-02 (open) should be included by --active filter")
 	}
-	if !ids["TASK-04"] {
+	if !ids[strings.ToUpper(mixedTask4ID)] {
 		t.Error("TASK-04 (blocked) should be included by --active filter")
 	}
 
 	// Generate DOT and verify content
 	dot := plan.GenerateFullDOT(b, filtered)
-	if strings.Contains(dot, "TASK-01") {
+	if strings.Contains(strings.ToLower(dot), strings.ToLower(mixedTask1ID)) {
 		t.Errorf("DOT output should not contain TASK-01 (done), got:\n%s", dot)
 	}
-	if strings.Contains(dot, "TASK-03") {
+	if strings.Contains(strings.ToLower(dot), strings.ToLower(mixedTask3ID)) {
 		t.Errorf("DOT output should not contain TASK-03 (closed), got:\n%s", dot)
 	}
-	if !strings.Contains(dot, "TASK-02") {
+	if !strings.Contains(strings.ToLower(dot), strings.ToLower(mixedTask2ID)) {
 		t.Errorf("DOT output should contain TASK-02 (open), got:\n%s", dot)
 	}
-	if !strings.Contains(dot, "TASK-04") {
+	if !strings.Contains(strings.ToLower(dot), strings.ToLower(mixedTask4ID)) {
 		t.Errorf("DOT output should contain TASK-04 (blocked), got:\n%s", dot)
 	}
 }
@@ -543,7 +556,7 @@ func TestActiveRenderPhasesExcludesDone(t *testing.T) {
 	}
 
 	// Simulate what renderGraph does for phases layout with --active
-	allElements, err := plan.AllDescendants(b, "EPIC-01")
+	allElements, err := plan.AllDescendants(b, mixedEpic1ID)
 	if err != nil {
 		t.Fatalf("AllDescendants: %v", err)
 	}
@@ -551,7 +564,7 @@ func TestActiveRenderPhasesExcludesDone(t *testing.T) {
 	// Exclude root element (like renderGraph does for phases)
 	var withoutRoot []*board.Element
 	for _, e := range allElements {
-		if e.ID() != "EPIC-01" {
+		if strings.ToUpper(e.ID()) != strings.ToUpper(mixedEpic1ID) {
 			withoutRoot = append(withoutRoot, e)
 		}
 	}
@@ -564,16 +577,16 @@ func TestActiveRenderPhasesExcludesDone(t *testing.T) {
 	}
 
 	dot := plan.GenerateDOT(fullPlan, filtered)
-	if strings.Contains(dot, "TASK-01") {
+	if strings.Contains(strings.ToLower(dot), strings.ToLower(mixedTask1ID)) {
 		t.Errorf("DOT output should not contain TASK-01 (done), got:\n%s", dot)
 	}
-	if strings.Contains(dot, "TASK-03") {
+	if strings.Contains(strings.ToLower(dot), strings.ToLower(mixedTask3ID)) {
 		t.Errorf("DOT output should not contain TASK-03 (closed), got:\n%s", dot)
 	}
-	if !strings.Contains(dot, "TASK-02") {
+	if !strings.Contains(strings.ToLower(dot), strings.ToLower(mixedTask2ID)) {
 		t.Errorf("DOT output should contain TASK-02 (open), got:\n%s", dot)
 	}
-	if !strings.Contains(dot, "TASK-04") {
+	if !strings.Contains(strings.ToLower(dot), strings.ToLower(mixedTask4ID)) {
 		t.Errorf("DOT output should contain TASK-04 (blocked), got:\n%s", dot)
 	}
 }
@@ -599,21 +612,21 @@ func TestActiveProjectLevelExcludesDoneEpic(t *testing.T) {
 
 	// EPIC-02 is done, should be excluded
 	for _, e := range filtered {
-		if e.ID() == "EPIC-02" {
+		if strings.ToUpper(e.ID()) == strings.ToUpper(mixedEpic2ID) {
 			t.Error("EPIC-02 (done) should be excluded by --active filter at project level")
 		}
 	}
 
-	// EPIC-01 is progress, should be included
+	// EPIC-01 is development, should be included
 	found := false
 	for _, e := range filtered {
-		if e.ID() == "EPIC-01" {
+		if strings.ToUpper(e.ID()) == strings.ToUpper(mixedEpic1ID) {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("EPIC-01 (progress) should be included by --active filter at project level")
+		t.Error("EPIC-01 (development) should be included by --active filter at project level")
 	}
 }
 

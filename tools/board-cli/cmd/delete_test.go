@@ -14,7 +14,7 @@ func TestDeleteLeaf(t *testing.T) {
 	boardDir = bd
 
 	// Delete TASK-03 (leaf, no children, no deps)
-	err := runDelete(deleteCmd, []string{"TASK-03"})
+	err := runDelete(deleteCmd, []string{testTask3ID})
 	if err != nil {
 		t.Fatalf("runDelete: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestDeleteLeaf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if b.FindByID("TASK-03") != nil {
+	if b.FindByID(testTask3ID) != nil {
 		t.Error("TASK-03 still exists after delete")
 	}
 }
@@ -34,7 +34,7 @@ func TestDeleteWithChildrenRefused(t *testing.T) {
 	boardDir = bd
 	deleteForce = false
 
-	err := runDelete(deleteCmd, []string{"EPIC-01"})
+	err := runDelete(deleteCmd, []string{testEpic1ID})
 	if err == nil {
 		t.Fatal("expected error when deleting parent without --force")
 	}
@@ -49,7 +49,7 @@ func TestDeleteWithForce(t *testing.T) {
 	deleteForce = true
 	defer func() { deleteForce = false }()
 
-	err := runDelete(deleteCmd, []string{"EPIC-01"})
+	err := runDelete(deleteCmd, []string{testEpic1ID})
 	if err != nil {
 		t.Fatalf("runDelete --force: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestDeleteCleansDeps(t *testing.T) {
 
 	// TASK-01 blocks TASK-02. Delete TASK-01, verify TASK-02's blockedBy is cleaned.
 	deleteForce = false
-	err := runDelete(deleteCmd, []string{"TASK-01"})
+	err := runDelete(deleteCmd, []string{testTask1ID})
 	if err != nil {
 		t.Fatalf("runDelete: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestDeleteCleansDeps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	task2 := b.FindByID("TASK-02")
+	task2 := b.FindByID(testTask2ID)
 	if task2 == nil {
 		t.Fatal("TASK-02 not found")
 	}

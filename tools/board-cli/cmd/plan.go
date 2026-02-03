@@ -21,6 +21,7 @@ var (
 	planFormat       string
 	planLayout       string
 	planActive       bool
+	planEngine       string
 )
 
 var planCmd = &cobra.Command{
@@ -44,6 +45,7 @@ func init() {
 	planCmd.Flags().StringVar(&planFormat, "format", "svg", "Render output format: svg, png, pdf")
 	planCmd.Flags().StringVar(&planLayout, "layout", "hierarchy", "Graph layout: hierarchy (epic/story clusters) or phases (phase clusters)")
 	planCmd.Flags().BoolVar(&planActive, "active", false, "Show only active elements (exclude done/closed)")
+	planCmd.Flags().StringVar(&planEngine, "engine", "", "Graphviz engine: dot, neato, fdp, circo, twopi (default: fdp for project, dot for epic/story)")
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {
@@ -265,7 +267,17 @@ func renderGraph(b *board.Board, scopeID string, elements []*board.Element, p *p
 		return err
 	}
 
-	if err := plan.RenderDOT(dot, outputPath, planFormat); err != nil {
+	// Determine engine: use flag if set, otherwise smart default
+	engine := planEngine
+	if engine == "" {
+		if scopeID == "" {
+			engine = "fdp" // project level: force-directed for overview
+		} else {
+			engine = "dot" // epic/story level: hierarchical
+		}
+	}
+
+	if err := plan.RenderDOT(dot, outputPath, planFormat, engine); err != nil {
 		return err
 	}
 

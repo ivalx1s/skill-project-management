@@ -32,7 +32,7 @@ func ParseProgressFile(path string) (*ProgressData, error) {
 // ParseProgress parses progress.md content.
 func ParseProgress(content string) (*ProgressData, error) {
 	pd := &ProgressData{
-		Status: StatusOpen,
+		Status: StatusBacklog,
 	}
 
 	scanner := bufio.NewScanner(strings.NewReader(content))
