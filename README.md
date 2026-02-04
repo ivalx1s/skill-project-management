@@ -31,6 +31,43 @@ go build -o task-board .
 - **Go** 1.21+
 - **Graphviz** (for `--render` graph output) — `brew install graphviz`
 
+## AI Agent Skill Setup
+
+This repo is an AI agent skill compatible with Claude Code, Codex CLI, and similar tools.
+
+### With `~/.agents/` infrastructure
+
+If you use [alexis-agents-infra](https://github.com/anthropics/alexis-agents-infra) for managing global instructions and skills:
+
+```bash
+# Clone this repo
+git clone <repo-url> ~/src/skill-project-management
+
+# Create external skills directory (not tracked by agents-infra)
+mkdir -p ~/.agents/skills
+
+# Symlink into external skills
+ln -s ~/src/skill-project-management ~/.agents/skills/project-management
+
+# Symlink to agent tools
+ln -s ~/.agents/skills/project-management ~/.claude/skills/project-management  # Claude Code
+ln -s ~/.agents/skills/project-management ~/.codex/skills/project-management   # Codex CLI
+```
+
+The `~/.agents/` pattern:
+- `~/.agents/.skills/` — skills bundled with agents-infra (auto-symlinked by `setup-symlinks.sh`)
+- `~/.agents/skills/` — external skills from separate repos (manual symlinks, gitignored)
+
+### Direct setup (without agents-infra)
+
+```bash
+# Clone and symlink directly
+git clone <repo-url> ~/src/skill-project-management
+mkdir -p ~/.claude/skills ~/.codex/skills
+ln -s ~/src/skill-project-management ~/.claude/skills/project-management
+ln -s ~/src/skill-project-management ~/.codex/skills/project-management
+```
+
 ## Quick Start
 
 ```bash

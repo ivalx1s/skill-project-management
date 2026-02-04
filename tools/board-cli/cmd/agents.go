@@ -46,19 +46,34 @@ func humanTime(t time.Time, now time.Time) string {
 	}
 }
 
-// childProgress returns "N/M done" for an element's children, or the element's own status if no children.
+// childProgress returns progress for an element's children, or the element's own status if no children.
+// Shows both to-review and done counts for visibility into agent work.
 func childProgress(b *board.Board, e *board.Element) string {
 	children := b.Children(e)
 	if len(children) == 0 {
 		return string(e.Status)
 	}
+	review := 0
 	done := 0
 	for _, c := range children {
+		if c.Status == board.StatusToReview {
+			review++
+		}
 		if c.Status == board.StatusDone || c.Status == board.StatusClosed {
 			done++
 		}
 	}
-	return fmt.Sprintf("%d/%d done", done, len(children))
+	total := len(children)
+	if review > 0 && done > 0 {
+		return fmt.Sprintf("%d/%d to-review, %d/%d done", review, total, done, total)
+	}
+	if review > 0 {
+		return fmt.Sprintf("%d/%d to-review", review, total)
+	}
+	if done > 0 {
+		return fmt.Sprintf("%d/%d done", done, total)
+	}
+	return fmt.Sprintf("0/%d", total)
 }
 
 func runAgents(cmd *cobra.Command, args []string) error {

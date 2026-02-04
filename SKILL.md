@@ -680,6 +680,9 @@ For EACH task:
 3. AFTER completing: `task-board progress status TASK-260203-XXXXXX to-review`
 4. Move to next task
 
+⚠️ NEVER set status to `done` — only the coordinator does that after review.
+Your final status should always be `to-review`, not `done`.
+
 If blocked:
   task-board progress status TASK-260203-XXXXXX blocked
   task-board progress notes TASK-260203-XXXXXX "Reason for block"
@@ -694,13 +697,16 @@ If blocked:
 
 ---
 
-## REMINDER: Update task-board status before and after EACH task!
+## REMINDER
+- Update task-board status before and after EACH task
+- Final status = `to-review` (NEVER `done` — coordinator handles that)
 ```
 
 **Key differences from naive template:**
 - First command is FIRST, before any context
 - Concrete task IDs, not placeholders
 - Warning about being stopped if not compliant
+- Explicit prohibition on setting `done` status (only coordinator does that)
 - Reminder repeated at the end
 
 **Why this matters:**
@@ -713,5 +719,30 @@ If blocked:
 task-board list tasks --story STORY-XX   # All should be to-review
 task-board agents                         # Agent should show N/N to-review
 ```
+
+### Coordinator Review Workflow
+
+When a sub-agent finishes (tasks in `to-review`), the coordinator MUST:
+
+1. **Take task for review:**
+   ```bash
+   task-board progress status TASK-260203-XXXXXX reviewing
+   ```
+
+2. **Review the code** — read files, check implementation matches AC
+
+3. **If approved:**
+   ```bash
+   task-board progress status TASK-260203-XXXXXX done
+   ```
+
+4. **If issues found:**
+   ```bash
+   task-board progress status TASK-260203-XXXXXX to-dev
+   task-board progress notes TASK-260203-XXXXXX "Issues: ..."
+   ```
+   Then re-assign agent or spawn new one to fix.
+
+**Important:** The coordinator should actively review while agents work, not wait until all finish. This unblocks dependent tasks sooner.
 
 ---
