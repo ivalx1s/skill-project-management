@@ -1,0 +1,23 @@
+=====================================
+=== SESSION START: 2026-02-05_23-47-29 ===
+Time: 2026-02-05T23:47:29+03:00
+Working dir: /Users/aagrigore1/src/skill-project-management
+=====================================
+
+[23:47:29.715] [INFO] Config loaded, refresh interval: 5s
+[23:47:31.790] [DEBUG] confirmQuit key: "right"
+[23:47:32.014] [DEBUG] confirmQuit key: "down"
+[23:47:32.346] [DEBUG] confirmQuit key: "right"
+[23:47:32.525] [DEBUG] confirmQuit key: "down"
+[23:47:32.541] [DEBUG] confirmQuit key: "left"
+[23:47:33.860] [DEBUG] confirmQuit key: "esc"
+[23:47:37.564] [DEBUG] confirmQuit key: "а"
+[23:47:37.624] [DEBUG] confirmQuit key: "в"
+[23:47:37.639] [DEBUG] confirmQuit key: "ы"
+[23:47:37.909] [DEBUG] confirmQuit key: "enter"
+[23:47:37.909] [INFO] Saving config and closing session
+
+=== SESSION END ===
+Duration: 8s
+Total actions: 12
+=====================================

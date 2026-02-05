@@ -1,0 +1,23 @@
+=====================================
+=== SESSION START: 2026-02-05_23-38-13 ===
+Time: 2026-02-05T23:38:13+03:00
+Working dir: /Users/aagrigore1/src/skill-project-management
+=====================================
+
+[23:38:13.230] [INFO] Config loaded, refresh interval: 5s
+[23:38:15.958] [INFO] [ACTION] command_palette: opened
+[23:38:16.602] [DEBUG] [KEY] f
+[23:38:16.602] [DEBUG] [STATE] command_palette active, input: ""
+[23:38:16.753] [DEBUG] [KEY] i
+[23:38:16.753] [DEBUG] [STATE] command_palette active, input: "f"
+[23:38:17.489] [DEBUG] [KEY] enter
+[23:38:17.489] [DEBUG] [STATE] command_palette active, input: "fi"
+[23:38:17.490] [INFO] CommandExecuteMsg received: cmd="filter" args=""
+[23:38:17.490] [INFO] executeCommand: cmd="filter" args=""
+[23:38:17.490] [INFO] [CMD] /filter → activating list filter
+[23:47:27.304] [INFO] Saving config and closing session
+
+=== SESSION END ===
+Duration: 9m14s
+Total actions: 12
+=====================================

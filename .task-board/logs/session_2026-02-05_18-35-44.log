@@ -1,0 +1,51 @@
+=====================================
+=== SESSION START: 2026-02-05_18-35-44 ===
+Time: 2026-02-05T18:35:44+03:00
+Working dir: /Users/aagrigore1/src/skill-project-management
+=====================================
+
+[18:35:44.601] [INFO] Config loaded, refresh interval: 5s
+[18:35:46.269] [INFO] [ACTION] command_palette: opened
+[18:35:47.064] [DEBUG] [KEY] down
+[18:35:47.064] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:47.319] [DEBUG] [KEY] down
+[18:35:47.319] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:47.845] [DEBUG] [KEY] enter
+[18:35:47.845] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:47.847] [INFO] CommandExecuteMsg received: cmd="settings" args=""
+[18:35:47.847] [INFO] executeCommand: cmd="settings" args=""
+[18:35:47.847] [INFO] [CMD] /settings → opening settings screen
+[18:35:50.364] [INFO] [ACTION] command_palette: opened
+[18:35:51.196] [DEBUG] [KEY] down
+[18:35:51.196] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:51.383] [DEBUG] [KEY] down
+[18:35:51.383] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:51.548] [DEBUG] [KEY] down
+[18:35:51.548] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:51.750] [DEBUG] [KEY] down
+[18:35:51.750] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:51.938] [DEBUG] [KEY] down
+[18:35:51.938] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:52.269] [DEBUG] [KEY] down
+[18:35:52.269] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:54.067] [DEBUG] [KEY] enter
+[18:35:54.067] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:54.068] [INFO] CommandExecuteMsg received: cmd="help" args=""
+[18:35:54.068] [INFO] executeCommand: cmd="help" args=""
+[18:35:54.068] [INFO] [CMD] /help → not implemented
+[18:35:57.262] [INFO] [ACTION] command_palette: opened
+[18:35:58.225] [DEBUG] [KEY] down
+[18:35:58.225] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:59.124] [DEBUG] [KEY] up
+[18:35:59.124] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:59.723] [DEBUG] [KEY] enter
+[18:35:59.723] [DEBUG] [STATE] command_palette active, input: ""
+[18:35:59.724] [INFO] CommandExecuteMsg received: cmd="filter" args=""
+[18:35:59.724] [INFO] executeCommand: cmd="filter" args=""
+[18:35:59.724] [INFO] [CMD] /filter → not implemented
+[18:36:03.068] [INFO] Saving config and closing session
+
+=== SESSION END ===
+Duration: 18s
+Total actions: 40
+=====================================

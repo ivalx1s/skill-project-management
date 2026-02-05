@@ -1,0 +1,103 @@
+=====================================
+=== SESSION START: 2026-02-05_18-36-20 ===
+Time: 2026-02-05T18:36:20+03:00
+Working dir: /Users/aagrigore1/src/skill-project-management
+=====================================
+
+[18:36:20.473] [INFO] Config loaded, refresh interval: 5s
+[18:36:23.604] [INFO] [ACTION] command_palette: opened
+[18:36:24.383] [DEBUG] [KEY] down
+[18:36:24.383] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:24.596] [DEBUG] [KEY] down
+[18:36:24.596] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:24.745] [DEBUG] [KEY] down
+[18:36:24.745] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:29.112] [DEBUG] [KEY] down
+[18:36:29.112] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:32.967] [DEBUG] [KEY] down
+[18:36:32.967] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:33.805] [DEBUG] [KEY] enter
+[18:36:33.805] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:33.806] [INFO] CommandExecuteMsg received: cmd="collapse" args=""
+[18:36:33.806] [INFO] executeCommand: cmd="collapse" args=""
+[18:36:33.806] [INFO] [CMD] /collapse → collapsing all
+[18:36:34.988] [INFO] [ACTION] command_palette: opened
+[18:36:35.724] [DEBUG] [KEY] down
+[18:36:35.724] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:35.921] [DEBUG] [KEY] down
+[18:36:35.921] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:36.055] [DEBUG] [KEY] down
+[18:36:36.055] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:36.190] [DEBUG] [KEY] down
+[18:36:36.190] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:36.324] [DEBUG] [KEY] down
+[18:36:36.324] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:36.473] [DEBUG] [KEY] down
+[18:36:36.473] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:37.135] [DEBUG] [KEY] enter
+[18:36:37.135] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:37.137] [INFO] CommandExecuteMsg received: cmd="help" args=""
+[18:36:37.137] [INFO] executeCommand: cmd="help" args=""
+[18:36:37.137] [INFO] [CMD] /help → not implemented
+[18:36:40.046] [INFO] [ACTION] command_palette: opened
+[18:36:42.055] [DEBUG] [KEY] enter
+[18:36:42.055] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:42.056] [INFO] CommandExecuteMsg received: cmd="filter" args=""
+[18:36:42.056] [INFO] executeCommand: cmd="filter" args=""
+[18:36:42.056] [INFO] [CMD] /filter → not implemented
+[18:36:49.947] [INFO] [ACTION] command_palette: opened
+[18:36:50.411] [DEBUG] [KEY] а
+[18:36:50.411] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:50.559] [DEBUG] [KEY] ш
+[18:36:50.559] [DEBUG] [STATE] command_palette active, input: "а"
+[18:36:50.770] [DEBUG] [KEY] д
+[18:36:50.770] [DEBUG] [STATE] command_palette active, input: "аш"
+[18:36:51.477] [DEBUG] [KEY] backspace
+[18:36:51.477] [DEBUG] [STATE] command_palette active, input: "ашд"
+[18:36:51.640] [DEBUG] [KEY] backspace
+[18:36:51.640] [DEBUG] [STATE] command_palette active, input: "аш"
+[18:36:51.791] [DEBUG] [KEY] backspace
+[18:36:51.791] [DEBUG] [STATE] command_palette active, input: "а"
+[18:36:51.911] [DEBUG] [KEY] backspace
+[18:36:51.911] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:52.691] [DEBUG] [KEY] /
+[18:36:52.691] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:53.185] [DEBUG] [KEY] f
+[18:36:53.185] [DEBUG] [STATE] command_palette active, input: "/"
+[18:36:53.292] [DEBUG] [KEY] i
+[18:36:53.293] [DEBUG] [STATE] command_palette active, input: "/f"
+[18:36:53.484] [DEBUG] [KEY] l
+[18:36:53.484] [DEBUG] [STATE] command_palette active, input: "/fi"
+[18:36:53.634] [DEBUG] [KEY] t
+[18:36:53.634] [DEBUG] [STATE] command_palette active, input: "/fil"
+[18:36:53.995] [DEBUG] [KEY] backspace
+[18:36:53.995] [DEBUG] [STATE] command_palette active, input: "/filt"
+[18:36:54.161] [DEBUG] [KEY] backspace
+[18:36:54.161] [DEBUG] [STATE] command_palette active, input: "/fil"
+[18:36:54.312] [DEBUG] [KEY] backspace
+[18:36:54.312] [DEBUG] [STATE] command_palette active, input: "/fi"
+[18:36:54.447] [DEBUG] [KEY] backspace
+[18:36:54.447] [DEBUG] [STATE] command_palette active, input: "/f"
+[18:36:54.581] [DEBUG] [KEY] backspace
+[18:36:54.582] [DEBUG] [STATE] command_palette active, input: "/"
+[18:36:54.760] [DEBUG] [KEY] backspace
+[18:36:54.760] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:55.539] [DEBUG] [KEY] /
+[18:36:55.539] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:56.574] [DEBUG] [KEY] backspace
+[18:36:56.574] [DEBUG] [STATE] command_palette active, input: "/"
+[18:36:56.800] [DEBUG] [KEY] f
+[18:36:56.800] [DEBUG] [STATE] command_palette active, input: ""
+[18:36:56.995] [DEBUG] [KEY] i
+[18:36:56.995] [DEBUG] [STATE] command_palette active, input: "f"
+[18:36:59.258] [DEBUG] [KEY] enter
+[18:36:59.258] [DEBUG] [STATE] command_palette active, input: "fi"
+[18:36:59.258] [INFO] CommandExecuteMsg received: cmd="filter" args=""
+[18:36:59.258] [INFO] executeCommand: cmd="filter" args=""
+[18:36:59.258] [INFO] [CMD] /filter → not implemented
+[18:38:15.251] [INFO] Saving config and closing session
+
+=== SESSION END ===
+Duration: 1m55s
+Total actions: 92
+=====================================

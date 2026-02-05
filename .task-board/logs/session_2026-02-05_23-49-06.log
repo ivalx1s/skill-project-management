@@ -1,0 +1,16 @@
+=====================================
+=== SESSION START: 2026-02-05_23-49-06 ===
+Time: 2026-02-05T23:49:06+03:00
+Working dir: /Users/aagrigore1/src/skill-project-management
+=====================================
+
+[23:49:06.727] [INFO] Config loaded, refresh interval: 5s
+[23:49:09.724] [DEBUG] confirmQuit key: "enter", selection: 0
+[23:49:11.405] [DEBUG] confirmQuit key: "right", selection: 0
+[23:49:11.792] [DEBUG] confirmQuit key: "enter", selection: 1
+[23:49:11.793] [INFO] Saving config and closing session
+
+=== SESSION END ===
+Duration: 5s
+Total actions: 5
+=====================================
