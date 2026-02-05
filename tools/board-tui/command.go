@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -284,7 +285,23 @@ func (m *CommandModel) GetCommands() []Command {
 
 // LoadAgents fetches agent data from CLI and enriches with children
 func LoadAgents() tea.Msg {
-	cmd := exec.Command("task-board", "agents", "--json")
+	return loadAgentsWithStale(0)
+}
+
+// LoadAgentsWithFilter returns a command that loads agents with stale filter
+func LoadAgentsWithFilter(staleMinutes int) tea.Cmd {
+	return func() tea.Msg {
+		return loadAgentsWithStale(staleMinutes)
+	}
+}
+
+// loadAgentsWithStale fetches agent data with optional stale filter
+func loadAgentsWithStale(staleMinutes int) tea.Msg {
+	args := []string{"agents", "--json"}
+	if staleMinutes > 0 {
+		args = append(args, "--stale", fmt.Sprintf("%d", staleMinutes))
+	}
+	cmd := exec.Command("task-board", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return AgentsLoadedMsg{Err: err}

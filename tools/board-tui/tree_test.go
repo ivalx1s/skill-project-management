@@ -58,8 +58,9 @@ func TestParseTreeJSON(t *testing.T) {
 	if epic.Name != "test-epic" {
 		t.Errorf("Expected name test-epic, got %s", epic.Name)
 	}
-	if !epic.Expanded {
-		t.Error("Epic should be expanded by default")
+	// Nodes are collapsed by default, expanded state is managed by config
+	if epic.Expanded {
+		t.Error("Epic should be collapsed by default")
 	}
 
 	if len(epic.Children) != 1 {

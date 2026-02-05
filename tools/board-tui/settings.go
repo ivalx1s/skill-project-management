@@ -7,20 +7,45 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// RefreshOption represents a selectable refresh rate option
+// RefreshOption represents a selectable option with duration
 type RefreshOption struct {
 	Label    string
 	Duration time.Duration // 0 means "Off"
 }
 
+// AgentsFilterOption represents an agents filter option
+type AgentsFilterOption struct {
+	Label       string
+	StaleMinutes int // 0 = all
+}
+
+// SettingsGroup represents which settings group is focused
+type SettingsGroup int
+
+const (
+	GroupRefresh SettingsGroup = iota
+	GroupAgents
+)
+
 // SettingsModel is the bubbletea model for the settings screen
 type SettingsModel struct {
-	options  []RefreshOption
-	cursor   int                 // Current selection cursor
-	selected int                 // Currently selected/applied option
-	width    int                 // Terminal width
-	height   int                 // Terminal height
-	onSave   func(time.Duration) // Callback when settings are saved
+	// Refresh rate settings
+	refreshOptions  []RefreshOption
+	refreshCursor   int
+	refreshSelected int
+
+	// Agents filter settings
+	agentsOptions  []AgentsFilterOption
+	agentsCursor   int
+	agentsSelected int
+
+	// UI state
+	focusGroup SettingsGroup
+	width      int
+	height     int
+
+	// Callback
+	onSave func(time.Duration)
 }
 
 // Styles for settings screen
@@ -37,9 +62,19 @@ var (
 				MarginTop(1).
 				MarginBottom(1)
 
+	settingsHeaderInactiveStyle = lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#808080")).
+					Bold(true).
+					MarginTop(1).
+					MarginBottom(1)
+
 	settingsOptionStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#C1C6B2")).
 				PaddingLeft(2)
+
+	settingsOptionInactiveStyle = lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#626262")).
+					PaddingLeft(2)
 
 	settingsSelectedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#6C5CE7")).
@@ -69,24 +104,52 @@ func DefaultRefreshOptions() []RefreshOption {
 	}
 }
 
+// DefaultAgentsOptions returns the available agents filter options
+func DefaultAgentsOptions() []AgentsFilterOption {
+	return []AgentsFilterOption{
+		{Label: "All agents", StaleMinutes: 0},
+		{Label: "Stale > 5 min", StaleMinutes: 5},
+		{Label: "Stale > 10 min", StaleMinutes: 10},
+		{Label: "Stale > 15 min", StaleMinutes: 15},
+		{Label: "Stale > 30 min", StaleMinutes: 30},
+		{Label: "Stale > 60 min", StaleMinutes: 60},
+	}
+}
+
 // NewSettingsModel creates a new settings model
 func NewSettingsModel(currentInterval time.Duration, onSave func(time.Duration)) SettingsModel {
-	options := DefaultRefreshOptions()
+	return NewSettingsModelWithAgents(currentInterval, 0, onSave)
+}
 
-	// Find the currently selected option based on the interval
-	selected := 1 // Default to "10 seconds"
-	for i, opt := range options {
+// NewSettingsModelWithAgents creates a new settings model with agents filter
+func NewSettingsModelWithAgents(currentInterval time.Duration, agentsFilter int, onSave func(time.Duration)) SettingsModel {
+	refreshOptions := DefaultRefreshOptions()
+	agentsOptions := DefaultAgentsOptions()
+
+	// Find selected refresh option
+	refreshSelected := 1 // Default to "10 seconds"
+	for i, opt := range refreshOptions {
 		if opt.Duration == currentInterval {
-			selected = i
+			refreshSelected = i
 			break
 		}
 	}
 
+	// Agents filter selection
+	agentsSelected := agentsFilter
+	if agentsSelected >= len(agentsOptions) {
+		agentsSelected = 0
+	}
+
 	return SettingsModel{
-		options:  options,
-		cursor:   selected,
-		selected: selected,
-		onSave:   onSave,
+		refreshOptions:  refreshOptions,
+		refreshCursor:   refreshSelected,
+		refreshSelected: refreshSelected,
+		agentsOptions:   agentsOptions,
+		agentsCursor:    agentsSelected,
+		agentsSelected:  agentsSelected,
+		focusGroup:      GroupRefresh,
+		onSave:          onSave,
 	}
 }
 
@@ -97,8 +160,10 @@ func (m SettingsModel) Init() tea.Cmd {
 
 // SettingsCloseMsg is sent when the settings screen should close
 type SettingsCloseMsg struct {
-	NewInterval time.Duration
-	Changed     bool
+	NewInterval     time.Duration
+	NewAgentsFilter int
+	RefreshChanged  bool
+	AgentsChanged   bool
 }
 
 // Update handles input for the settings model
@@ -107,33 +172,22 @@ func (m SettingsModel) Update(msg tea.Msg) (SettingsModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.moveCursorUp()
 		case "down", "j":
-			if m.cursor < len(m.options)-1 {
-				m.cursor++
-			}
+			m.moveCursorDown()
+		case "tab", "right", "l":
+			m.nextGroup()
+		case "shift+tab", "left", "h":
+			m.prevGroup()
 		case "enter", " ":
-			// Select the option under cursor
-			oldSelected := m.selected
-			m.selected = m.cursor
-			if m.onSave != nil {
-				m.onSave(m.options[m.selected].Duration)
-			}
-			// Return close message with the new interval
+			return m.selectCurrent()
+		case "esc", "q":
 			return m, func() tea.Msg {
 				return SettingsCloseMsg{
-					NewInterval: m.options[m.selected].Duration,
-					Changed:     oldSelected != m.selected,
-				}
-			}
-		case "esc":
-			// Close without changing (return current selection)
-			return m, func() tea.Msg {
-				return SettingsCloseMsg{
-					NewInterval: m.options[m.selected].Duration,
-					Changed:     false,
+					NewInterval:     m.refreshOptions[m.refreshSelected].Duration,
+					NewAgentsFilter: m.agentsSelected,
+					RefreshChanged:  false,
+					AgentsChanged:   false,
 				}
 			}
 		}
@@ -146,55 +200,182 @@ func (m SettingsModel) Update(msg tea.Msg) (SettingsModel, tea.Cmd) {
 	return m, nil
 }
 
+func (m *SettingsModel) moveCursorUp() {
+	switch m.focusGroup {
+	case GroupRefresh:
+		if m.refreshCursor > 0 {
+			m.refreshCursor--
+		}
+	case GroupAgents:
+		if m.agentsCursor > 0 {
+			m.agentsCursor--
+		}
+	}
+}
+
+func (m *SettingsModel) moveCursorDown() {
+	switch m.focusGroup {
+	case GroupRefresh:
+		if m.refreshCursor < len(m.refreshOptions)-1 {
+			m.refreshCursor++
+		}
+	case GroupAgents:
+		if m.agentsCursor < len(m.agentsOptions)-1 {
+			m.agentsCursor++
+		}
+	}
+}
+
+func (m *SettingsModel) nextGroup() {
+	if m.focusGroup == GroupRefresh {
+		m.focusGroup = GroupAgents
+	}
+}
+
+func (m *SettingsModel) prevGroup() {
+	if m.focusGroup == GroupAgents {
+		m.focusGroup = GroupRefresh
+	}
+}
+
+func (m SettingsModel) selectCurrent() (SettingsModel, tea.Cmd) {
+	oldRefresh := m.refreshSelected
+	oldAgents := m.agentsSelected
+
+	switch m.focusGroup {
+	case GroupRefresh:
+		m.refreshSelected = m.refreshCursor
+		if m.onSave != nil {
+			m.onSave(m.refreshOptions[m.refreshSelected].Duration)
+		}
+	case GroupAgents:
+		m.agentsSelected = m.agentsCursor
+	}
+
+	return m, func() tea.Msg {
+		return SettingsCloseMsg{
+			NewInterval:     m.refreshOptions[m.refreshSelected].Duration,
+			NewAgentsFilter: m.agentsSelected,
+			RefreshChanged:  oldRefresh != m.refreshSelected,
+			AgentsChanged:   oldAgents != m.agentsSelected,
+		}
+	}
+}
+
 // View renders the settings screen
 func (m SettingsModel) View() string {
 	var s string
 
-	// Title
 	s += settingsTitleStyle.Render("Settings") + "\n\n"
 
-	// Section header
-	s += settingsHeaderStyle.Render("Refresh Rate") + "\n"
+	// Render two groups side by side
+	leftCol := m.renderRefreshGroup()
+	rightCol := m.renderAgentsGroup()
 
-	// Radio button options
-	for i, opt := range m.options {
-		// Determine the radio button state
+	// Join columns horizontally with spacing
+	columns := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "    ", rightCol)
+	s += columns
+
+	s += settingsHelpStyle.Render("\n\n  ↑/↓ navigate • ←/→/Tab switch group • Enter select • Esc back")
+
+	return settingsContainerStyle.Render(s)
+}
+
+func (m SettingsModel) renderRefreshGroup() string {
+	var s string
+	active := m.focusGroup == GroupRefresh
+
+	if active {
+		s += settingsHeaderStyle.Render("Refresh Rate") + "\n"
+	} else {
+		s += settingsHeaderInactiveStyle.Render("Refresh Rate") + "\n"
+	}
+
+	for i, opt := range m.refreshOptions {
 		var radioBtn string
-		if i == m.selected {
-			radioBtn = "●" // Selected (filled)
+		if i == m.refreshSelected {
+			radioBtn = "●"
 		} else {
-			radioBtn = "○" // Not selected (empty)
+			radioBtn = "○"
 		}
 
-		// Build the line
 		var line string
-		if i == m.cursor {
-			// Cursor is on this line - highlight it
+		if active && i == m.refreshCursor {
 			radioBtn = settingsCursorStyle.Render(radioBtn)
 			line = settingsSelectedStyle.Render(radioBtn + " " + opt.Label)
-		} else if i == m.selected {
-			// This is the selected option but cursor isn't here
-			line = settingsSelectedStyle.Render(radioBtn + " " + opt.Label)
+		} else if i == m.refreshSelected {
+			if active {
+				line = settingsSelectedStyle.Render(radioBtn + " " + opt.Label)
+			} else {
+				line = settingsOptionInactiveStyle.Render(radioBtn + " " + opt.Label)
+			}
 		} else {
-			// Regular unselected option
-			line = settingsOptionStyle.Render(radioBtn + " " + opt.Label)
+			if active {
+				line = settingsOptionStyle.Render(radioBtn + " " + opt.Label)
+			} else {
+				line = settingsOptionInactiveStyle.Render(radioBtn + " " + opt.Label)
+			}
 		}
 
 		s += line + "\n"
 	}
 
-	// Help text
-	s += settingsHelpStyle.Render("\n  ↑/↓ navigate • Enter/Space select • Esc back")
+	return s
+}
 
-	return settingsContainerStyle.Render(s)
+func (m SettingsModel) renderAgentsGroup() string {
+	var s string
+	active := m.focusGroup == GroupAgents
+
+	if active {
+		s += settingsHeaderStyle.Render("Agents Display") + "\n"
+	} else {
+		s += settingsHeaderInactiveStyle.Render("Agents Display") + "\n"
+	}
+
+	for i, opt := range m.agentsOptions {
+		var radioBtn string
+		if i == m.agentsSelected {
+			radioBtn = "●"
+		} else {
+			radioBtn = "○"
+		}
+
+		var line string
+		if active && i == m.agentsCursor {
+			radioBtn = settingsCursorStyle.Render(radioBtn)
+			line = settingsSelectedStyle.Render(radioBtn + " " + opt.Label)
+		} else if i == m.agentsSelected {
+			if active {
+				line = settingsSelectedStyle.Render(radioBtn + " " + opt.Label)
+			} else {
+				line = settingsOptionInactiveStyle.Render(radioBtn + " " + opt.Label)
+			}
+		} else {
+			if active {
+				line = settingsOptionStyle.Render(radioBtn + " " + opt.Label)
+			} else {
+				line = settingsOptionInactiveStyle.Render(radioBtn + " " + opt.Label)
+			}
+		}
+
+		s += line + "\n"
+	}
+
+	return s
 }
 
 // GetSelectedDuration returns the currently selected refresh duration
 func (m SettingsModel) GetSelectedDuration() time.Duration {
-	if m.selected >= 0 && m.selected < len(m.options) {
-		return m.options[m.selected].Duration
+	if m.refreshSelected >= 0 && m.refreshSelected < len(m.refreshOptions) {
+		return m.refreshOptions[m.refreshSelected].Duration
 	}
 	return defaultRefreshInterval
+}
+
+// GetSelectedAgentsFilter returns the selected agents filter index
+func (m SettingsModel) GetSelectedAgentsFilter() int {
+	return m.agentsSelected
 }
 
 // SetSize updates the terminal size for the settings view

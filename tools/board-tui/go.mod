@@ -1,4 +1,4 @@
-module github.com/aagrigore/board-tui
+module board-tui
 
 go 1.25.5
 

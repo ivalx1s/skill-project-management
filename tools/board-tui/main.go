@@ -171,6 +171,7 @@ type model struct {
 	logger               *Logger       // Session logger
 	confirmQuit          bool          // Show quit confirmation dialog
 	confirmSelection     int           // 0 = No (default), 1 = Yes
+	agentsFilter         int           // Agents filter: 0=all, 1-5=stale minutes
 }
 
 func (m model) Init() tea.Cmd {
@@ -451,7 +452,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Auto-refresh based on current screen
 		if m.currentScreen == AgentsScreen {
 			// Refresh agents data
-			return m, tea.Batch(LoadAgents, m.tickCmd())
+			return m, tea.Batch(LoadAgentsWithFilter(m.getStaleMinutes()), m.tickCmd())
 		}
 		// Skip refresh if filter is active to preserve filter state
 		if m.list.FilterState() != list.Unfiltered {
@@ -483,21 +484,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SettingsCloseMsg:
 		// Return to board screen
 		m.currentScreen = BoardScreen
+
 		// Update refresh interval if changed
-		if msg.Changed && msg.NewInterval > 0 {
-			m.refreshInterval = msg.NewInterval
-			// Update config
-			if m.config != nil {
-				m.config.RefreshRate = int(msg.NewInterval.Seconds())
+		if msg.RefreshChanged {
+			if msg.NewInterval > 0 {
+				m.refreshInterval = msg.NewInterval
+				if m.config != nil {
+					m.config.RefreshRate = int(msg.NewInterval.Seconds())
+				}
+			} else {
+				// Refresh disabled - set a very long interval
+				m.refreshInterval = 24 * time.Hour
+				if m.config != nil {
+					m.config.RefreshRate = 0
+				}
 			}
-			// Restart the tick with new interval
+		}
+
+		// Update agents filter if changed
+		if msg.AgentsChanged {
+			m.agentsFilter = msg.NewAgentsFilter
+			if m.config != nil {
+				m.config.AgentsFilter = msg.NewAgentsFilter
+			}
+		}
+
+		// Restart tick if refresh changed
+		if msg.RefreshChanged && msg.NewInterval > 0 {
 			return m, m.tickCmd()
-		} else if msg.Changed && msg.NewInterval == 0 {
-			// Refresh disabled - set a very long interval
-			m.refreshInterval = 24 * time.Hour
-			if m.config != nil {
-				m.config.RefreshRate = 0
-			}
 		}
 		return m, nil
 
@@ -584,7 +598,7 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 		m.agentsModel = NewAgentsModel()
 		m.agentsModel.SetSize(m.width, m.height)
 		m.currentScreen = AgentsScreen
-		return m, LoadAgents
+		return m, LoadAgentsWithFilter(m.getStaleMinutes())
 
 	case "help":
 		if m.logger != nil {
@@ -611,7 +625,7 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 		if m.logger != nil {
 			m.logger.Command("settings", "", "opening settings screen")
 		}
-		m.settingsModel = NewSettingsModel(m.refreshInterval, nil)
+		m.settingsModel = NewSettingsModelWithAgents(m.refreshInterval, m.agentsFilter, nil)
 		m.settingsModel.SetSize(m.width, m.height)
 		m.currentScreen = SettingsScreen
 		return m, nil
@@ -643,6 +657,15 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// getStaleMinutes converts agentsFilter index to stale minutes
+func (m *model) getStaleMinutes() int {
+	opts := DefaultAgentsOptions()
+	if m.agentsFilter >= 0 && m.agentsFilter < len(opts) {
+		return opts[m.agentsFilter].StaleMinutes
+	}
+	return 0
 }
 
 func (m *model) refreshList() {
@@ -955,6 +978,7 @@ func main() {
 		refreshInterval: refreshInterval,
 		config:          cfg,
 		logger:          logger,
+		agentsFilter:    cfg.AgentsFilter,
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())

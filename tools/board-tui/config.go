@@ -18,6 +18,8 @@ type Config struct {
 	RefreshRate int `json:"refreshRate"`
 	// ExpandedNodes is a list of node IDs to expand on startup
 	ExpandedNodes []string `json:"expandedNodes"`
+	// AgentsFilter is the filter mode for agents display (0=all, 1-5 = stale minutes index)
+	AgentsFilter int `json:"agentsFilter"`
 }
 
 // DefaultConfig returns a Config with default values
