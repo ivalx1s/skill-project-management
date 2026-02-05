@@ -2,12 +2,29 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/aagrigore/task-board/internal/board"
+	"github.com/aagrigore/task-board/internal/output"
 	"github.com/spf13/cobra"
 )
+
+// ProgressResponse represents the JSON response for progress commands
+type ProgressResponse struct {
+	Updated UpdatedElement `json:"updated"`
+	Message string         `json:"message"`
+}
+
+// ChecklistResponse represents the JSON response for checklist commands
+type ChecklistResponse struct {
+	ID        string              `json:"id"`
+	Checklist []ChecklistItemJSON `json:"checklist"`
+}
+
+// ChecklistItemJSON is defined in show.go, but we need it here too
+// We'll reuse the one from show.go since they're in the same package
 
 var progressCmd = &cobra.Command{
 	Use:   "progress",
@@ -87,21 +104,39 @@ func runProgressStatus(cmd *cobra.Command, args []string) error {
 	id := args[0]
 	newStatus, err := board.ParseStatus(args[1])
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InvalidStatus, err.Error(), nil)
+			return nil
+		}
 		return err
 	}
 
 	b, err := board.Load(boardDir)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("loading board: %w", err)
 	}
 
 	elem := b.FindByID(id)
 	if elem == nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.NotFound, fmt.Sprintf("Element %s not found", id), map[string]interface{}{
+				"id": id,
+			})
+			return nil
+		}
 		return fmt.Errorf("element %s not found", id)
 	}
 
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("reading progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("reading progress: %w", err)
 	}
 
@@ -111,8 +146,18 @@ func runProgressStatus(cmd *cobra.Command, args []string) error {
 		activeBlockers := b.ActiveBlockers(elem)
 		if len(activeBlockers) > 0 {
 			var blockerDescs []string
+			var blockerIDs []string
 			for _, blocker := range activeBlockers {
 				blockerDescs = append(blockerDescs, fmt.Sprintf("%s (status: %s)", blocker.ID(), blocker.Status))
+				blockerIDs = append(blockerIDs, blocker.ID())
+			}
+			if JSONEnabled() {
+				output.PrintError(os.Stderr, output.ValidationError,
+					fmt.Sprintf("Cannot set %s to %s — blocked by unfinished tasks", id, newStatus),
+					map[string]interface{}{
+						"blockedBy": blockerIDs,
+					})
+				return nil
 			}
 			return fmt.Errorf("cannot set %s to %s — blocked by:\n  %s",
 				id, newStatus, strings.Join(blockerDescs, "\n  "))
@@ -121,13 +166,38 @@ func runProgressStatus(cmd *cobra.Command, args []string) error {
 
 	pd.Status = newStatus
 	if err := board.WriteProgressFile(elem.ProgressPath(), pd); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("writing progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("writing progress: %w", err)
 	}
 
 	// Update in-memory status for auto-promotion check
 	elem.Status = newStatus
 
-	fmt.Printf("%s → %s\n", id, newStatus)
+	if JSONEnabled() {
+		// Get name from README
+		rd, _ := board.ParseReadmeFile(elem.ReadmePath())
+		name := ""
+		if rd != nil {
+			name = rd.Title
+		}
+
+		response := ProgressResponse{
+			Updated: UpdatedElement{
+				ID:       elem.ID(),
+				Type:     string(elem.Type),
+				Name:     name,
+				Status:   string(newStatus),
+				Assignee: pd.AssignedTo,
+			},
+			Message: fmt.Sprintf("Status changed to %s", newStatus),
+		}
+		output.PrintJSON(os.Stdout, response)
+	} else {
+		fmt.Printf("%s → %s\n", id, newStatus)
+	}
 
 	// Auto-promote parent if all children are done
 	if newStatus == board.StatusDone {
@@ -218,17 +288,46 @@ func runProgressChecklist(cmd *cobra.Command, args []string) error {
 
 	b, err := board.Load(boardDir)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("loading board: %w", err)
 	}
 
 	elem := b.FindByID(id)
 	if elem == nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.NotFound, fmt.Sprintf("Element %s not found", id), map[string]interface{}{
+				"id": id,
+			})
+			return nil
+		}
 		return fmt.Errorf("element %s not found", id)
 	}
 
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("reading progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("reading progress: %w", err)
+	}
+
+	if JSONEnabled() {
+		checklist := make([]ChecklistItemJSON, len(pd.Checklist))
+		for i, item := range pd.Checklist {
+			checklist[i] = ChecklistItemJSON{
+				Text: item.Text,
+				Done: item.Checked,
+			}
+		}
+		response := ChecklistResponse{
+			ID:        id,
+			Checklist: checklist,
+		}
+		return output.PrintJSON(os.Stdout, response)
 	}
 
 	if len(pd.Checklist) == 0 {
@@ -258,30 +357,61 @@ func runProgressUncheck(cmd *cobra.Command, args []string) error {
 func toggleChecklistItem(id, numStr string, checked bool) error {
 	num, err := strconv.Atoi(numStr)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.ValidationError, fmt.Sprintf("invalid item number: %s", numStr), nil)
+			return nil
+		}
 		return fmt.Errorf("invalid item number: %s", numStr)
 	}
 
 	b, err := board.Load(boardDir)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("loading board: %w", err)
 	}
 
 	elem := b.FindByID(id)
 	if elem == nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.NotFound, fmt.Sprintf("Element %s not found", id), map[string]interface{}{
+				"id": id,
+			})
+			return nil
+		}
 		return fmt.Errorf("element %s not found", id)
 	}
 
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("reading progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("reading progress: %w", err)
 	}
 
 	if num < 1 || num > len(pd.Checklist) {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.ValidationError,
+				fmt.Sprintf("item %d out of range (1-%d)", num, len(pd.Checklist)),
+				map[string]interface{}{
+					"itemNumber": num,
+					"maxItems":   len(pd.Checklist),
+				})
+			return nil
+		}
 		return fmt.Errorf("item %d out of range (1-%d)", num, len(pd.Checklist))
 	}
 
 	pd.Checklist[num-1].Checked = checked
 	if err := board.WriteProgressFile(elem.ProgressPath(), pd); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("writing progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("writing progress: %w", err)
 	}
 
@@ -289,6 +419,28 @@ func toggleChecklistItem(id, numStr string, checked bool) error {
 	if !checked {
 		action = "unchecked"
 	}
+
+	if JSONEnabled() {
+		// Get name from README
+		rd, _ := board.ParseReadmeFile(elem.ReadmePath())
+		name := ""
+		if rd != nil {
+			name = rd.Title
+		}
+
+		response := ProgressResponse{
+			Updated: UpdatedElement{
+				ID:       elem.ID(),
+				Type:     string(elem.Type),
+				Name:     name,
+				Status:   string(pd.Status),
+				Assignee: pd.AssignedTo,
+			},
+			Message: fmt.Sprintf("Item %d %s: %s", num, action, pd.Checklist[num-1].Text),
+		}
+		return output.PrintJSON(os.Stdout, response)
+	}
+
 	fmt.Printf("%s item %d %s: %s\n", id, num, action, pd.Checklist[num-1].Text)
 	return nil
 }
@@ -299,16 +451,30 @@ func runProgressNotes(cmd *cobra.Command, args []string) error {
 
 	b, err := board.Load(boardDir)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("loading board: %w", err)
 	}
 
 	elem := b.FindByID(id)
 	if elem == nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.NotFound, fmt.Sprintf("Element %s not found", id), map[string]interface{}{
+				"id": id,
+			})
+			return nil
+		}
 		return fmt.Errorf("element %s not found", id)
 	}
 
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("reading progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("reading progress: %w", err)
 	}
 
@@ -323,6 +489,10 @@ func runProgressNotes(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := board.WriteProgressFile(elem.ProgressPath(), pd); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("writing progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("writing progress: %w", err)
 	}
 
@@ -330,6 +500,28 @@ func runProgressNotes(cmd *cobra.Command, args []string) error {
 	if progressNotesSet {
 		action = "set"
 	}
+
+	if JSONEnabled() {
+		// Get name from README
+		rd, _ := board.ParseReadmeFile(elem.ReadmePath())
+		name := ""
+		if rd != nil {
+			name = rd.Title
+		}
+
+		response := ProgressResponse{
+			Updated: UpdatedElement{
+				ID:       elem.ID(),
+				Type:     string(elem.Type),
+				Name:     name,
+				Status:   string(pd.Status),
+				Assignee: pd.AssignedTo,
+			},
+			Message: fmt.Sprintf("Notes %s", action),
+		}
+		return output.PrintJSON(os.Stdout, response)
+	}
+
 	fmt.Printf("%s: notes %s\n", id, action)
 	return nil
 }
@@ -340,22 +532,61 @@ func runProgressAddItem(cmd *cobra.Command, args []string) error {
 
 	b, err := board.Load(boardDir)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("loading board: %w", err)
 	}
 
 	elem := b.FindByID(id)
 	if elem == nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.NotFound, fmt.Sprintf("Element %s not found", id), map[string]interface{}{
+				"id": id,
+			})
+			return nil
+		}
 		return fmt.Errorf("element %s not found", id)
 	}
 
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("reading progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("reading progress: %w", err)
 	}
 
 	pd.Checklist = append(pd.Checklist, board.ChecklistItem{Text: text, Checked: false})
 	if err := board.WriteProgressFile(elem.ProgressPath(), pd); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("writing progress: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("writing progress: %w", err)
+	}
+
+	if JSONEnabled() {
+		// Get name from README
+		rd, _ := board.ParseReadmeFile(elem.ReadmePath())
+		name := ""
+		if rd != nil {
+			name = rd.Title
+		}
+
+		response := ProgressResponse{
+			Updated: UpdatedElement{
+				ID:       elem.ID(),
+				Type:     string(elem.Type),
+				Name:     name,
+				Status:   string(pd.Status),
+				Assignee: pd.AssignedTo,
+			},
+			Message: fmt.Sprintf("Added item %d: %s", len(pd.Checklist), text),
+		}
+		return output.PrintJSON(os.Stdout, response)
 	}
 
 	fmt.Printf("%s: added item %d — %s\n", id, len(pd.Checklist), text)

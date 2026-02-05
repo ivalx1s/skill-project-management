@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/aagrigore/task-board/internal/board"
@@ -9,7 +10,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var agentsAll   bool
+// AgentsResponse is the JSON response structure for agents command
+type AgentsResponse struct {
+	Agents      []AgentInfo  `json:"agents"`
+	TotalAgents int          `json:"totalAgents"`
+	Filters     AgentFilters `json:"filters"`
+}
+
+// AgentInfo represents an agent with their assigned elements
+type AgentInfo struct {
+	Name             string                 `json:"name"`
+	AssignedElements []AgentAssignedElement `json:"assignedElements"`
+	TotalAssigned    int                    `json:"totalAssigned"`
+	StaleCount       int                    `json:"staleCount"`
+}
+
+// AgentAssignedElement represents an element assigned to an agent
+type AgentAssignedElement struct {
+	ID         string  `json:"id"`
+	Type       string  `json:"type"`
+	Name       string  `json:"name"`
+	Status     string  `json:"status"`
+	UpdatedAt  string  `json:"updatedAt"`
+	StaleSince *string `json:"staleSince"`
+}
+
+// AgentFilters shows which filters were applied
+type AgentFilters struct {
+	StaleMinutes int `json:"staleMinutes"`
+}
+
+var agentsAll bool
 var agentsStale int
 
 var agentsCmd = &cobra.Command{
@@ -79,6 +110,9 @@ func childProgress(b *board.Board, e *board.Element) string {
 func runAgents(cmd *cobra.Command, args []string) error {
 	b, err := board.Load(boardDir)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %v", err), nil)
+		}
 		return fmt.Errorf("loading board: %w", err)
 	}
 
@@ -100,6 +134,11 @@ func runAgents(cmd *cobra.Command, args []string) error {
 			}
 		}
 		assigned = append(assigned, e)
+	}
+
+	// JSON output
+	if JSONEnabled() {
+		return printAgentsJSON(assigned, now, freshness)
 	}
 
 	if len(assigned) == 0 {
@@ -136,4 +175,62 @@ func runAgents(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nTotal: %d agents, %d active, %d done\n", len(assigned), active, done)
 
 	return nil
+}
+
+func printAgentsJSON(assigned []*board.Element, now time.Time, freshness time.Duration) error {
+	// Group elements by agent name
+	agentMap := make(map[string][]*board.Element)
+	for _, e := range assigned {
+		agentMap[e.AssignedTo] = append(agentMap[e.AssignedTo], e)
+	}
+
+	// Build response
+	agents := make([]AgentInfo, 0, len(agentMap))
+	for agentName, elements := range agentMap {
+		assignedElements := make([]AgentAssignedElement, 0, len(elements))
+		staleCount := 0
+
+		for _, e := range elements {
+			// Format updatedAt
+			updatedAt := ""
+			if !e.LastUpdate.IsZero() {
+				updatedAt = e.LastUpdate.Format("2006-01-02T15:04:05Z")
+			}
+
+			// Determine staleSince - element is stale if not done/closed and updated longer than freshness ago
+			var staleSince *string
+			isDone := e.Status == board.StatusDone || e.Status == board.StatusClosed
+			if !isDone && !e.LastUpdate.IsZero() && now.Sub(e.LastUpdate) > freshness {
+				staleTime := e.LastUpdate.Add(freshness).Format("2006-01-02T15:04:05Z")
+				staleSince = &staleTime
+				staleCount++
+			}
+
+			assignedElements = append(assignedElements, AgentAssignedElement{
+				ID:         e.ID(),
+				Type:       string(e.Type),
+				Name:       e.Name,
+				Status:     string(e.Status),
+				UpdatedAt:  updatedAt,
+				StaleSince: staleSince,
+			})
+		}
+
+		agents = append(agents, AgentInfo{
+			Name:             agentName,
+			AssignedElements: assignedElements,
+			TotalAssigned:    len(elements),
+			StaleCount:       staleCount,
+		})
+	}
+
+	response := AgentsResponse{
+		Agents:      agents,
+		TotalAgents: len(agents),
+		Filters: AgentFilters{
+			StaleMinutes: int(freshness.Minutes()),
+		},
+	}
+
+	return output.PrintJSON(os.Stdout, response)
 }

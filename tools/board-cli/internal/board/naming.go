@@ -17,6 +17,7 @@ var legacyDirPattern = regexp.MustCompile(`^(EPIC|STORY|TASK|BUG)-(\d+)_([^/]+)$
 // Supported formats:
 //   - TYPE-YYMMDD-xxxxxx_name (distributed ID)
 //   - TYPE-NN_name (legacy sequential ID)
+//
 // Returns: type, number (legacy only), name, error
 func ParseDirName(dirName string) (ElementType, int, string, error) {
 	matches := dirPattern.FindStringSubmatch(dirName)

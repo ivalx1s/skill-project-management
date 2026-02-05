@@ -93,12 +93,12 @@ func (t ElementType) CounterKey() string {
 
 // Element represents a board element (epic, story, task, or bug).
 type Element struct {
-	Type      ElementType
-	Number    int    // Deprecated: used for old sequential IDs
-	RawID     string // Full ID like "TASK-260101-aaaaaa"
-	Name      string
-	Path      string // absolute path to element directory
-	ParentID  string // e.g. "EPIC-260101-aaaaaa" for a story
+	Type       ElementType
+	Number     int    // Deprecated: used for old sequential IDs
+	RawID      string // Full ID like "TASK-260101-aaaaaa"
+	Name       string
+	Path       string // absolute path to element directory
+	ParentID   string // e.g. "EPIC-260101-aaaaaa" for a story
 	Status     Status
 	AssignedTo string
 	CreatedAt  time.Time

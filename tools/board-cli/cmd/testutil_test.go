@@ -8,16 +8,16 @@ import (
 
 // Test IDs in new distributed format (YYMMDD-xxxxxx)
 const (
-	testEpic1ID   = "EPIC-260101-aaaaaa"
-	testEpic2ID   = "EPIC-260101-bbbbbb"
-	testStory1ID  = "STORY-260101-cccccc"
-	testStory2ID  = "STORY-260101-dddddd"
-	testStory3ID  = "STORY-260101-eeeeee"
-	testTask1ID   = "TASK-260101-ffffff"
-	testTask2ID   = "TASK-260101-gggggg"
-	testTask3ID   = "TASK-260101-hhhhhh"
-	testTask4ID   = "TASK-260101-iiiiii"
-	testBug1ID    = "BUG-260101-jjjjjj"
+	testEpic1ID  = "EPIC-260101-aaaaaa"
+	testEpic2ID  = "EPIC-260101-bbbbbb"
+	testStory1ID = "STORY-260101-cccccc"
+	testStory2ID = "STORY-260101-dddddd"
+	testStory3ID = "STORY-260101-eeeeee"
+	testTask1ID  = "TASK-260101-ffffff"
+	testTask2ID  = "TASK-260101-gggggg"
+	testTask3ID  = "TASK-260101-hhhhhh"
+	testTask4ID  = "TASK-260101-iiiiii"
+	testBug1ID   = "BUG-260101-jjjjjj"
 )
 
 // setupTestBoard creates a temp board with known structure for cmd tests.

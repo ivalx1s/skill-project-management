@@ -133,12 +133,17 @@ IDs are globally unique and work in parallel environments (no counter conflicts)
 ├── EPIC-260203-a1b2c3_recording/
 │   ├── README.md                 # Epic description, scope, AC
 │   ├── progress.md               # Status, blockedBy, checklist, notes
+│   ├── artifacts/                # Optional: epic-level artifacts
+│   │   └── architecture.png
 │   ├── STORY-260203-d4e5f6_audio-capture/
 │   │   ├── README.md
 │   │   ├── progress.md
+│   │   ├── artifacts/            # Optional: story-level artifacts
+│   │   │   └── RESEARCH.md
 │   │   ├── TASK-260203-g7h8i9_interface/
 │   │   │   ├── README.md
-│   │   │   └── progress.md
+│   │   │   ├── progress.md
+│   │   │   └── artifacts/        # Optional: task-level artifacts
 │   │   ├── TASK-260203-j0k1l2_implementation/
 │   │   │   ├── README.md
 │   │   │   └── progress.md
@@ -300,6 +305,55 @@ This allows traversal in both directions — who blocks me and who I block.
 - `link TASK-05 --blocked-by TASK-02` (different stories) → STORY blocked by STORY
 - Different epics → EPIC blocked by EPIC
 - `unlink` reverses escalation if no cross-links remain.
+
+---
+
+## Artifacts
+
+Work products (research docs, diagrams, exported data, etc.) can be stored directly in the element's directory under `artifacts/`.
+
+### When to Use Artifacts
+
+- **Research results** — `RESEARCH.md`, analysis documents
+- **Diagrams** — architecture diagrams, flowcharts, sequence diagrams
+- **Exported data** — JSON dumps, CSV reports, logs
+- **Design docs** — API specs, wireframes, decision records
+- **Any deliverable** that's not code but is part of the work
+
+### Structure
+
+```
+STORY-260205-abc123_deep-research/
+├── README.md
+├── progress.md
+└── artifacts/
+    ├── RESEARCH.md           # Main research document
+    ├── comparison-table.md   # Supporting materials
+    └── architecture.png      # Diagrams
+```
+
+### Referencing Artifacts
+
+Reference artifacts from parent elements using relative paths:
+
+**In Epic README.md:**
+```markdown
+## References
+- Research: [STORY-260205-abc123/artifacts/RESEARCH.md](./STORY-260205-abc123_deep-research/artifacts/RESEARCH.md)
+```
+
+**In Notes (progress.md):**
+```bash
+task-board progress notes EPIC-01 "See research: STORY-260205-abc123/artifacts/RESEARCH.md"
+```
+
+### Best Practices
+
+- Keep artifacts **close to the work** — store in the element that produced them
+- Use **descriptive filenames** — `RESEARCH.md` not `doc.md`
+- **Reference from parent** — if artifact is relevant to epic/story, add link in parent's README or notes
+- Artifacts are **versioned with git** — they're part of the project history
+- Large binaries → consider `.gitignore` and store externally
 
 ---
 
@@ -505,6 +559,7 @@ task-board validate
 - **Visualize at milestones** — render graphs before, during, and after execution
 - **Verify agents early** — run `task-board agents` within 2 minutes of launch; if status not updated, stop and restart with better prompt
 - **Concrete IDs only** — never use placeholders like `TASK-XXX` in prompts; always use real IDs like `TASK-260203-ae3fcd`
+- **Store artifacts in element** — research docs, diagrams, exports go to `artifacts/` folder; reference from parent if relevant
 
 ---
 

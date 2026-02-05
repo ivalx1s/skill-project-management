@@ -9,8 +9,8 @@ import (
 
 // Problem represents an issue found in the dependency graph.
 type Problem struct {
-	Severity string   // "error" or "warning" or "info"
-	Type     string   // "cycle", "critical-path"
+	Severity string // "error" or "warning" or "info"
+	Type     string // "cycle", "critical-path"
 	Message  string
 	Elements []string // IDs involved
 }

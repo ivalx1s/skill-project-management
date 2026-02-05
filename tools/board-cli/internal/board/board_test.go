@@ -8,11 +8,11 @@ import (
 
 // Test IDs in new distributed format
 const (
-	tEpic1   = "EPIC-260101-aaaaaa"
-	tStory1  = "STORY-260101-bbbbbb"
-	tTask1   = "TASK-260101-cccccc"
-	tTask2   = "TASK-260101-dddddd"
-	tStory2  = "STORY-260101-eeeeee"
+	tEpic1  = "EPIC-260101-aaaaaa"
+	tStory1 = "STORY-260101-bbbbbb"
+	tTask1  = "TASK-260101-cccccc"
+	tTask2  = "TASK-260101-dddddd"
+	tStory2 = "STORY-260101-eeeeee"
 )
 
 func setupTestBoard(t *testing.T) string {

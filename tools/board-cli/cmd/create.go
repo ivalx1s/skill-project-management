@@ -4,12 +4,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aagrigore/task-board/internal/board"
+	"github.com/aagrigore/task-board/internal/output"
 	"github.com/aagrigore/task-board/templates"
 	"github.com/spf13/cobra"
 )
+
+// CreateResponse is the JSON response for create commands
+type CreateResponse struct {
+	Created CreatedElement `json:"created"`
+}
+
+// CreatedElement represents a newly created element
+type CreatedElement struct {
+	ID     string `json:"id"`
+	Type   string `json:"type"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Parent string `json:"parent,omitempty"`
+	Path   string `json:"path"`
+}
 
 var createCmd = &cobra.Command{
 	Use:   "create",
@@ -96,6 +113,10 @@ func runCreateBug(cmd *cobra.Command, args []string) error {
 
 func createElement(elemType board.ElementType, name, description, parentID string) error {
 	if err := board.EnsureBoardDir(boardDir); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, err.Error(), nil)
+			return nil
+		}
 		return err
 	}
 
@@ -104,10 +125,20 @@ func createElement(elemType board.ElementType, name, description, parentID strin
 	if parentID != "" {
 		b, err := board.Load(boardDir)
 		if err != nil {
+			if JSONEnabled() {
+				output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %s", err.Error()), nil)
+				return nil
+			}
 			return fmt.Errorf("loading board: %w", err)
 		}
 		parent := b.FindByID(parentID)
 		if parent == nil {
+			if JSONEnabled() {
+				output.PrintError(os.Stderr, output.NotFound, fmt.Sprintf("parent %s not found", parentID), map[string]interface{}{
+					"parent_id": parentID,
+				})
+				return nil
+			}
 			return fmt.Errorf("parent %s not found", parentID)
 		}
 		parentDir = parent.Path
@@ -122,6 +153,10 @@ func createElement(elemType board.ElementType, name, description, parentID strin
 	elemPath := filepath.Join(parentDir, dirName)
 
 	if err := os.MkdirAll(elemPath, 0755); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("creating directory: %s", err.Error()), nil)
+			return nil
+		}
 		return fmt.Errorf("creating directory: %w", err)
 	}
 
@@ -132,18 +167,34 @@ func createElement(elemType board.ElementType, name, description, parentID strin
 		Description: description,
 	})
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("rendering readme template: %s", err.Error()), nil)
+			return nil
+		}
 		return fmt.Errorf("rendering readme template: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(elemPath, "README.md"), []byte(readmeContent), 0644); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("writing README.md: %s", err.Error()), nil)
+			return nil
+		}
 		return fmt.Errorf("writing README.md: %w", err)
 	}
 
 	// Render and write progress.md
 	progressContent, err := templates.RenderProgress(string(elemType))
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("rendering progress template: %s", err.Error()), nil)
+			return nil
+		}
 		return fmt.Errorf("rendering progress template: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(elemPath, "progress.md"), []byte(progressContent), 0644); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("writing progress.md: %s", err.Error()), nil)
+			return nil
+		}
 		return fmt.Errorf("writing progress.md: %w", err)
 	}
 
@@ -155,7 +206,35 @@ func createElement(elemType board.ElementType, name, description, parentID strin
 		board.WriteProgressFile(progressPath, pd)
 	}
 
-	fmt.Printf("Created %s: %s\n", id, name)
-	fmt.Printf("  Path: %s\n", elemPath)
+	if JSONEnabled() {
+		// Compute relative path from board root
+		relPath := computeRelativePath(boardDir, elemPath)
+
+		resp := CreateResponse{
+			Created: CreatedElement{
+				ID:     id,
+				Type:   string(elemType),
+				Name:   name,
+				Status: string(board.StatusBacklog),
+				Parent: parentID,
+				Path:   relPath,
+			},
+		}
+		output.PrintJSON(os.Stdout, resp)
+	} else {
+		fmt.Printf("Created %s: %s\n", id, name)
+		fmt.Printf("  Path: %s\n", elemPath)
+	}
 	return nil
+}
+
+// computeRelativePath computes a hierarchical path like "EPIC-X/STORY-Y/TASK-Z"
+// from the board directory to the element path
+func computeRelativePath(boardDir, elemPath string) string {
+	rel, err := filepath.Rel(boardDir, elemPath)
+	if err != nil {
+		return filepath.Base(elemPath)
+	}
+	// Convert path separators to forward slashes for consistent output
+	return strings.ReplaceAll(rel, string(filepath.Separator), "/")
 }

@@ -13,6 +13,35 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// PlanResponse is the JSON response structure for plan command
+type PlanResponse struct {
+	Plan PlanOutput `json:"plan"`
+}
+
+// PlanOutput represents the plan in JSON format
+type PlanOutput struct {
+	EpicID             string        `json:"epicId"`
+	EpicName           string        `json:"epicName"`
+	Phases             []PhaseOutput `json:"phases"`
+	CriticalPath       []string      `json:"criticalPath"`
+	CriticalPathLength int           `json:"criticalPathLength"`
+}
+
+// PhaseOutput represents a phase in JSON format
+type PhaseOutput struct {
+	Phase       int            `json:"phase"`
+	Description *string        `json:"description"`
+	Elements    []PhaseElement `json:"elements"`
+}
+
+// PhaseElement represents an element within a phase in JSON format
+type PhaseElement struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Status    string   `json:"status"`
+	BlockedBy []string `json:"blockedBy"`
+}
+
 var (
 	planSave         bool
 	planCriticalPath bool
@@ -51,6 +80,9 @@ func init() {
 func runPlan(cmd *cobra.Command, args []string) error {
 	b, err := board.Load(boardDir)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %v", err), nil)
+		}
 		return fmt.Errorf("loading board: %w", err)
 	}
 
@@ -61,12 +93,21 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	elements, err := plan.ScopeElements(b, scopeID)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.NotFound, err.Error(), nil)
+		}
 		return err
 	}
 
 	p := plan.BuildPlan(elements)
 
 	if p.HasCycle {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.CycleDetected, "dependency cycle detected", map[string]interface{}{
+				"nodes": p.CycleNodes,
+			})
+			os.Exit(1)
+		}
 		fmt.Fprintf(os.Stderr, "Error: dependency cycle detected involving: %s\n", strings.Join(p.CycleNodes, ", "))
 		os.Exit(1)
 	}
@@ -79,6 +120,10 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	if planSave {
 		return savePlanMD(b, scopeID, scopeName, p)
+	}
+
+	if JSONEnabled() {
+		return printPlanJSON(b, scopeID, p)
 	}
 
 	printPlan(scopeName, p)
@@ -150,6 +195,67 @@ func printCriticalPath(p *plan.Plan) {
 		ids = append(ids, e.ID())
 	}
 	fmt.Printf("  %s (%d phases)\n", strings.Join(ids, " -> "), len(p.Phases))
+}
+
+func printPlanJSON(b *board.Board, scopeID string, p *plan.Plan) error {
+	// Get epic info
+	epicID := ""
+	epicName := "Project"
+	if scopeID != "" {
+		elem := b.FindByID(scopeID)
+		if elem != nil {
+			epicID = elem.ID()
+			epicName = elem.Name
+		}
+	}
+
+	// Build phases output
+	phases := make([]PhaseOutput, 0, len(p.Phases))
+	for _, phase := range p.Phases {
+		elements := make([]PhaseElement, 0, len(phase.Elements))
+		for _, e := range phase.Elements {
+			blockedBy := e.BlockedBy
+			if blockedBy == nil {
+				blockedBy = []string{}
+			}
+			elements = append(elements, PhaseElement{
+				ID:        e.ID(),
+				Name:      e.Name,
+				Status:    string(e.Status),
+				BlockedBy: blockedBy,
+			})
+		}
+
+		var description *string
+		if phase.Number == 1 {
+			desc := "no dependencies"
+			description = &desc
+		}
+
+		phases = append(phases, PhaseOutput{
+			Phase:       phase.Number,
+			Description: description,
+			Elements:    elements,
+		})
+	}
+
+	// Build critical path output
+	criticalPath := make([]string, 0, len(p.CriticalPath))
+	for _, e := range p.CriticalPath {
+		criticalPath = append(criticalPath, e.ID())
+	}
+
+	response := PlanResponse{
+		Plan: PlanOutput{
+			EpicID:             epicID,
+			EpicName:           epicName,
+			Phases:             phases,
+			CriticalPath:       criticalPath,
+			CriticalPathLength: len(p.CriticalPath),
+		},
+	}
+
+	return output.PrintJSON(os.Stdout, response)
 }
 
 func savePlanMD(b *board.Board, scopeID, scopeName string, p *plan.Plan) error {

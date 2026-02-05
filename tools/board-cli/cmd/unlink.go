@@ -2,10 +2,25 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/aagrigore/task-board/internal/board"
+	"github.com/aagrigore/task-board/internal/output"
 	"github.com/spf13/cobra"
 )
+
+// UnlinkResponse represents the JSON response for unlink command
+type UnlinkResponse struct {
+	Updated UnlinkUpdate `json:"updated"`
+	Message string       `json:"message"`
+}
+
+// UnlinkUpdate contains the unlink details
+type UnlinkUpdate struct {
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	Relation string `json:"relation"`
+}
 
 var unlinkCmd = &cobra.Command{
 	Use:   "unlink <ID>",
@@ -27,22 +42,42 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 
 	b, err := board.Load(boardDir)
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("loading board: %v", err), nil)
+			return nil
+		}
 		return fmt.Errorf("loading board: %w", err)
 	}
 
 	elem := b.FindByID(id)
 	if elem == nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.NotFound, fmt.Sprintf("element %s not found", id), map[string]interface{}{
+				"id": id,
+			})
+			return nil
+		}
 		return fmt.Errorf("element %s not found", id)
 	}
 
 	blocker := b.FindByID(unlinkBlockedBy)
 	if blocker == nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.NotFound, fmt.Sprintf("blocker %s not found", unlinkBlockedBy), map[string]interface{}{
+				"id": unlinkBlockedBy,
+			})
+			return nil
+		}
 		return fmt.Errorf("blocker %s not found", unlinkBlockedBy)
 	}
 
 	// Remove from element's BlockedBy
 	pd, err := board.ParseProgressFile(elem.ProgressPath())
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("reading progress for %s: %v", id, err), nil)
+			return nil
+		}
 		return fmt.Errorf("reading progress for %s: %w", id, err)
 	}
 
@@ -56,16 +91,31 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		newBlockedBy = append(newBlockedBy, bid)
 	}
 	if !found {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.ValidationError, fmt.Sprintf("%s is not blocked by %s", id, blocker.ID()), map[string]interface{}{
+				"source": id,
+				"target": blocker.ID(),
+			})
+			return nil
+		}
 		return fmt.Errorf("%s is not blocked by %s", id, blocker.ID())
 	}
 	pd.BlockedBy = newBlockedBy
 	if err := board.WriteProgressFile(elem.ProgressPath(), pd); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("writing progress for %s: %v", id, err), nil)
+			return nil
+		}
 		return fmt.Errorf("writing progress for %s: %w", id, err)
 	}
 
 	// Remove from blocker's Blocks
 	blockerPd, err := board.ParseProgressFile(blocker.ProgressPath())
 	if err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("reading progress for %s: %v", blocker.ID(), err), nil)
+			return nil
+		}
 		return fmt.Errorf("reading progress for %s: %w", blocker.ID(), err)
 	}
 
@@ -78,16 +128,37 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 	}
 	blockerPd.Blocks = newBlocks
 	if err := board.WriteProgressFile(blocker.ProgressPath(), blockerPd); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("writing progress for %s: %v", blocker.ID(), err), nil)
+			return nil
+		}
 		return fmt.Errorf("writing progress for %s: %w", blocker.ID(), err)
+	}
+
+	// --- De-escalate dependencies up the hierarchy ---
+	if err := deescalateDependency(b, elem, blocker); err != nil {
+		if JSONEnabled() {
+			output.PrintError(os.Stderr, output.InternalError, fmt.Sprintf("de-escalating dependency: %v", err), nil)
+			return nil
+		}
+		return fmt.Errorf("de-escalating dependency: %w", err)
+	}
+
+	// Output result
+	if JSONEnabled() {
+		response := UnlinkResponse{
+			Updated: UnlinkUpdate{
+				Source:   id,
+				Target:   blocker.ID(),
+				Relation: "blocked-by",
+			},
+			Message: fmt.Sprintf("%s no longer blocked by %s", id, blocker.ID()),
+		}
+		return output.PrintJSON(os.Stdout, response)
 	}
 
 	fmt.Printf("%s: removed blocked-by %s\n", id, blocker.ID())
 	fmt.Printf("%s: removed blocks %s\n", blocker.ID(), id)
-
-	// --- De-escalate dependencies up the hierarchy ---
-	if err := deescalateDependency(b, elem, blocker); err != nil {
-		return fmt.Errorf("de-escalating dependency: %w", err)
-	}
 
 	return nil
 }

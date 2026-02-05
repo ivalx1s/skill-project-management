@@ -8,8 +8,8 @@ import (
 
 func TestGenerateIDFormat(t *testing.T) {
 	tests := []struct {
-		typ      ElementType
-		prefix   string
+		typ    ElementType
+		prefix string
 	}{
 		{EpicType, "EPIC"},
 		{StoryType, "STORY"},
