@@ -1,9 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -27,36 +24,6 @@ type CommandModel struct {
 	selectedIdx int // Selected suggestion index
 }
 
-// AgentInfo holds agent dashboard info
-type AgentInfo struct {
-	Name             string          `json:"name"`
-	AssignedElements []AssignedElement `json:"assignedElements"`
-	TotalAssigned    int             `json:"totalAssigned"`
-	StaleCount       int             `json:"staleCount"`
-}
-
-type AssignedElement struct {
-	ID        string  `json:"id"`
-	Type      string  `json:"type"`
-	Name      string  `json:"name"`
-	Status    string  `json:"status"`
-	UpdatedAt string  `json:"updatedAt"`
-	StaleSince *string `json:"staleSince"`
-	Children  []ChildElement `json:"-"` // Loaded separately for stories
-}
-
-type ChildElement struct {
-	ID     string `json:"id"`
-	Type   string `json:"type"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
-}
-
-type AgentsResponse struct {
-	Agents      []AgentInfo `json:"agents"`
-	TotalAgents int         `json:"totalAgents"`
-}
-
 // Messages
 type CommandExecuteMsg struct {
 	Command string
@@ -64,11 +31,6 @@ type CommandExecuteMsg struct {
 }
 
 type CommandCancelMsg struct{}
-
-type AgentsLoadedMsg struct {
-	Agents []AgentInfo
-	Err    error
-}
 
 // NewCommandModel creates a new command input model
 func NewCommandModel() CommandModel {
@@ -283,87 +245,3 @@ func (m *CommandModel) GetCommands() []Command {
 	return m.commands
 }
 
-// LoadAgents fetches agent data from CLI and enriches with children
-func LoadAgents() tea.Msg {
-	return loadAgentsWithStale(0)
-}
-
-// LoadAgentsWithFilter returns a command that loads agents with stale filter
-func LoadAgentsWithFilter(staleMinutes int) tea.Cmd {
-	return func() tea.Msg {
-		return loadAgentsWithStale(staleMinutes)
-	}
-}
-
-// loadAgentsWithStale fetches agent data with optional stale filter
-func loadAgentsWithStale(staleMinutes int) tea.Msg {
-	args := []string{"agents", "--json"}
-	if staleMinutes > 0 {
-		args = append(args, "--stale", fmt.Sprintf("%d", staleMinutes))
-	}
-	cmd := exec.Command("task-board", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return AgentsLoadedMsg{Err: err}
-	}
-
-	var response AgentsResponse
-	if err := json.Unmarshal(output, &response); err != nil {
-		return AgentsLoadedMsg{Err: err}
-	}
-
-	// Load tree to get children for stories/epics
-	childrenMap := loadChildrenMap()
-
-	// Enrich assigned elements with children
-	for i := range response.Agents {
-		for j := range response.Agents[i].AssignedElements {
-			elem := &response.Agents[i].AssignedElements[j]
-			if elem.Type == "story" || elem.Type == "epic" {
-				elem.Children = childrenMap[elem.ID]
-			}
-		}
-	}
-
-	return AgentsLoadedMsg{Agents: response.Agents}
-}
-
-// loadChildrenMap loads tree and builds map of id -> children
-func loadChildrenMap() map[string][]ChildElement {
-	result := make(map[string][]ChildElement)
-
-	cmd := exec.Command("task-board", "tree", "--json")
-	output, err := cmd.Output()
-	if err != nil {
-		return result
-	}
-
-	var treeResp TreeResponse
-	if err := json.Unmarshal(output, &treeResp); err != nil {
-		return result
-	}
-
-	// Recursively collect children
-	var collectChildren func(node *TreeNode)
-	collectChildren = func(node *TreeNode) {
-		if len(node.Children) > 0 {
-			children := make([]ChildElement, 0, len(node.Children))
-			for _, child := range node.Children {
-				children = append(children, ChildElement{
-					ID:     child.ID,
-					Type:   child.Type,
-					Name:   child.Name,
-					Status: child.Status,
-				})
-				collectChildren(child)
-			}
-			result[node.ID] = children
-		}
-	}
-
-	for _, root := range treeResp.Tree {
-		collectChildren(root)
-	}
-
-	return result
-}

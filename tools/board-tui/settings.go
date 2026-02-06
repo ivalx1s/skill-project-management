@@ -19,12 +19,19 @@ type AgentsFilterOption struct {
 	StaleMinutes int // 0 = all
 }
 
+// ScrollOption represents a scroll sensitivity option
+type ScrollOption struct {
+	Label       string
+	Sensitivity float64
+}
+
 // SettingsGroup represents which settings group is focused
 type SettingsGroup int
 
 const (
 	GroupRefresh SettingsGroup = iota
 	GroupAgents
+	GroupScroll
 )
 
 // SettingsModel is the bubbletea model for the settings screen
@@ -38,6 +45,11 @@ type SettingsModel struct {
 	agentsOptions  []AgentsFilterOption
 	agentsCursor   int
 	agentsSelected int
+
+	// Scroll sensitivity settings
+	scrollOptions  []ScrollOption
+	scrollCursor   int
+	scrollSelected int
 
 	// UI state
 	focusGroup SettingsGroup
@@ -116,15 +128,33 @@ func DefaultAgentsOptions() []AgentsFilterOption {
 	}
 }
 
+// DefaultScrollOptions returns the available scroll sensitivity options
+func DefaultScrollOptions() []ScrollOption {
+	return []ScrollOption{
+		{Label: "0.1 (very smooth)", Sensitivity: 0.1},
+		{Label: "0.2", Sensitivity: 0.2},
+		{Label: "0.3", Sensitivity: 0.3},
+		{Label: "0.5 (default)", Sensitivity: 0.5},
+		{Label: "0.7", Sensitivity: 0.7},
+		{Label: "1.0 (instant)", Sensitivity: 1.0},
+	}
+}
+
 // NewSettingsModel creates a new settings model
 func NewSettingsModel(currentInterval time.Duration, onSave func(time.Duration)) SettingsModel {
-	return NewSettingsModelWithAgents(currentInterval, 0, onSave)
+	return NewSettingsModelFull(currentInterval, 0, 0.5, onSave)
 }
 
 // NewSettingsModelWithAgents creates a new settings model with agents filter
 func NewSettingsModelWithAgents(currentInterval time.Duration, agentsFilter int, onSave func(time.Duration)) SettingsModel {
+	return NewSettingsModelFull(currentInterval, agentsFilter, 0.5, onSave)
+}
+
+// NewSettingsModelFull creates a new settings model with all parameters
+func NewSettingsModelFull(currentInterval time.Duration, agentsFilter int, scrollSensitivity float64, onSave func(time.Duration)) SettingsModel {
 	refreshOptions := DefaultRefreshOptions()
 	agentsOptions := DefaultAgentsOptions()
+	scrollOptions := DefaultScrollOptions()
 
 	// Find selected refresh option
 	refreshSelected := 1 // Default to "10 seconds"
@@ -141,6 +171,15 @@ func NewSettingsModelWithAgents(currentInterval time.Duration, agentsFilter int,
 		agentsSelected = 0
 	}
 
+	// Find selected scroll option
+	scrollSelected := 3 // Default to "0.5"
+	for i, opt := range scrollOptions {
+		if opt.Sensitivity == scrollSensitivity {
+			scrollSelected = i
+			break
+		}
+	}
+
 	return SettingsModel{
 		refreshOptions:  refreshOptions,
 		refreshCursor:   refreshSelected,
@@ -148,6 +187,9 @@ func NewSettingsModelWithAgents(currentInterval time.Duration, agentsFilter int,
 		agentsOptions:   agentsOptions,
 		agentsCursor:    agentsSelected,
 		agentsSelected:  agentsSelected,
+		scrollOptions:   scrollOptions,
+		scrollCursor:    scrollSelected,
+		scrollSelected:  scrollSelected,
 		focusGroup:      GroupRefresh,
 		onSave:          onSave,
 	}
@@ -160,10 +202,12 @@ func (m SettingsModel) Init() tea.Cmd {
 
 // SettingsCloseMsg is sent when the settings screen should close
 type SettingsCloseMsg struct {
-	NewInterval     time.Duration
-	NewAgentsFilter int
-	RefreshChanged  bool
-	AgentsChanged   bool
+	NewInterval         time.Duration
+	NewAgentsFilter     int
+	NewScrollSensitivity float64
+	RefreshChanged      bool
+	AgentsChanged       bool
+	ScrollChanged       bool
 }
 
 // Update handles input for the settings model
@@ -210,6 +254,10 @@ func (m *SettingsModel) moveCursorUp() {
 		if m.agentsCursor > 0 {
 			m.agentsCursor--
 		}
+	case GroupScroll:
+		if m.scrollCursor > 0 {
+			m.scrollCursor--
+		}
 	}
 }
 
@@ -223,17 +271,27 @@ func (m *SettingsModel) moveCursorDown() {
 		if m.agentsCursor < len(m.agentsOptions)-1 {
 			m.agentsCursor++
 		}
+	case GroupScroll:
+		if m.scrollCursor < len(m.scrollOptions)-1 {
+			m.scrollCursor++
+		}
 	}
 }
 
 func (m *SettingsModel) nextGroup() {
-	if m.focusGroup == GroupRefresh {
+	switch m.focusGroup {
+	case GroupRefresh:
 		m.focusGroup = GroupAgents
+	case GroupAgents:
+		m.focusGroup = GroupScroll
 	}
 }
 
 func (m *SettingsModel) prevGroup() {
-	if m.focusGroup == GroupAgents {
+	switch m.focusGroup {
+	case GroupScroll:
+		m.focusGroup = GroupAgents
+	case GroupAgents:
 		m.focusGroup = GroupRefresh
 	}
 }

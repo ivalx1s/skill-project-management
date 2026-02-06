@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -68,89 +67,12 @@ var (
 	}
 )
 
-// BoardItem represents a task board element for the list view
-type BoardItem struct {
-	node       *TreeNode
-	treePrefix string
-	depth      int
-}
-
-func (i BoardItem) Title() string {
-	// Build the visual title with tree prefix and expand indicator
-	var expandIndicator string
-	if i.node.HasChildren() {
-		if i.node.Expanded {
-			expandIndicator = "▼" // Expanded - pointing down
-		} else {
-			expandIndicator = "▶" // Collapsed - pointing right
-		}
-	} else {
-		expandIndicator = " " // No children - empty space
-	}
-
-	// Get type indicator and style
-	typeInd := typeIndicators[i.node.Type]
-	if typeInd == "" {
-		typeInd = "?"
-	}
-
-	// Apply type-specific color to the indicator
-	typeStyle, ok := typeStyles[i.node.Type]
-	if !ok {
-		typeStyle = lipgloss.NewStyle()
-	}
-	styledTypeInd := typeStyle.Render(typeInd)
-
-	// Status styling
-	status := i.node.Status
-	statusStyle, ok := statusStyles[status]
-	if !ok {
-		statusStyle = lipgloss.NewStyle()
-	}
-
-	assignee := ""
-	if a := i.node.GetAssignee(); a != "" {
-		assignee = fmt.Sprintf(" @%s", a)
-	}
-
-	// All on one line: prefix + expand + type + ID + name + [status] + @assignee
-	return fmt.Sprintf("%s%s %s %s %s %s%s",
-		i.treePrefix, expandIndicator, styledTypeInd, i.node.ID,
-		i.node.Name, statusStyle.Render("["+status+"]"), assignee)
-}
-
-func (i BoardItem) Description() string {
-	var parts []string
-
-	// Show blocked by
-	if len(i.node.BlockedBy) > 0 {
-		blockedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4500"))
-		parts = append(parts, blockedStyle.Render("← blocked by: ")+strings.Join(i.node.BlockedBy, ", "))
-	}
-
-	// Show blocks
-	if len(i.node.Blocks) > 0 {
-		blocksStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500"))
-		parts = append(parts, blocksStyle.Render("→ blocks: ")+strings.Join(i.node.Blocks, ", "))
-	}
-
-	if len(parts) == 0 {
-		return ""
-	}
-
-	// Add indent to match tree prefix
-	indent := strings.Repeat(" ", len(i.treePrefix)+2)
-	return indent + strings.Join(parts, "  ")
-}
-
-func (i BoardItem) FilterValue() string {
-	return i.node.ID + " " + i.node.Name + " " + i.node.Status
-}
-
 // Model is the bubbletea model
 type model struct {
-	list            list.Model
-	tree            []*TreeNode // The tree data
+	tree             []*TreeNode // The tree data
+	boardRows        []boardRow
+	boardSelectedIdx int
+	boardScrollOff   int
 	quitting        bool
 	err             error
 	refreshInterval time.Duration // Auto-refresh interval
@@ -160,14 +82,13 @@ type model struct {
 	width           int           // Terminal width for status bar
 	height          int           // Terminal height
 	currentScreen        Screen        // Current screen being displayed
+	previousScreen       Screen        // Screen to return to from detail
 	config               *Config       // Persisted configuration
 	configLoaded         bool          // True after initial config has been applied to tree
 	settingsModel        SettingsModel // Settings screen model
 	detailModel          DetailModel   // Detail view model
 	agentsModel          AgentsModel   // Agents dashboard model
 	commandModel         CommandModel  // Command palette model
-	preFilterExpandedIDs []string      // Expanded state before filtering
-	wasFiltering         bool          // Track filter state changes
 	logger               *Logger       // Session logger
 	confirmQuit          bool          // Show quit confirmation dialog
 	confirmSelection     int           // 0 = No (default), 1 = Yes
@@ -236,9 +157,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Check if we're in filter mode (either typing or applied) - if so, only handle ctrl+c for force quit
-		isFiltering := m.currentScreen == BoardScreen && m.list.FilterState() != list.Unfiltered
-
 		switch msg.String() {
 		case "ctrl+c":
 			m.saveConfigOnQuit()
@@ -246,7 +164,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "q":
-			if !isFiltering && m.currentScreen == BoardScreen {
+			if m.currentScreen == BoardScreen {
 				m.confirmQuit = true
 				return m, nil
 			}
@@ -262,14 +180,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.currentScreen == DetailScreen {
-				m.currentScreen = BoardScreen
+				m.currentScreen = m.previousScreen
 				return m, nil
 			}
-			if !isFiltering && m.currentScreen == BoardScreen {
+			if m.currentScreen == BoardScreen {
 				m.confirmQuit = true
 				return m, nil
 			}
-			// When filtering, let bubbles/list handle esc to close filter
 
 		}
 
@@ -284,70 +201,56 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Board-specific key handlers (skip when filtering to allow typing)
-		if m.currentScreen == BoardScreen && m.list.FilterState() != list.Filtering {
+		// Board-specific key handlers
+		if m.currentScreen == BoardScreen {
 			switch msg.String() {
 			case "enter", "o":
-				// Open detail view for selected item
-				if item, ok := m.list.SelectedItem().(BoardItem); ok {
-					m.detailModel = NewDetailModel()
-					m.detailModel.SetSize(m.width, m.height)
-					m.currentScreen = DetailScreen
-					return m, m.detailModel.LoadElement(item.node.ID)
+				if node := m.boardSelectedNode(); node != nil {
+					id := node.ID
+					return m, func() tea.Msg { return OpenDetailMsg{ID: id} }
 				}
 				return m, nil
 
 			case " ":
-				// Toggle expand/collapse on selected item
-				if item, ok := m.list.SelectedItem().(BoardItem); ok {
-					if item.node.HasChildren() {
-						item.node.Toggle()
-						m.refreshList()
-					}
+				if node := m.boardSelectedNode(); node != nil && node.HasChildren() {
+					node.Toggle()
+					m.boardRebuildRows()
 				}
 				return m, nil
 
 			case "e":
-				// Expand all
 				for _, root := range m.tree {
 					root.ExpandAll()
 				}
-				m.refreshList()
+				m.boardRebuildRows()
 				return m, nil
 
 			case "c":
-				// Collapse all
 				for _, root := range m.tree {
 					root.CollapseAll()
 				}
-				m.refreshList()
+				m.boardRebuildRows()
 				return m, nil
 
 			case "right", "l":
-				// Expand selected
-				if item, ok := m.list.SelectedItem().(BoardItem); ok {
-					if item.node.HasChildren() && !item.node.Expanded {
-						item.node.Expand()
-						m.refreshList()
-					}
+				if node := m.boardSelectedNode(); node != nil && node.HasChildren() && !node.Expanded {
+					node.Expand()
+					m.boardRebuildRows()
 				}
 				return m, nil
 
 			case "left", "h":
-				// Collapse selected or go to parent
-				if item, ok := m.list.SelectedItem().(BoardItem); ok {
-					if item.node.Expanded && item.node.HasChildren() {
-						item.node.Collapse()
-						m.refreshList()
-					} else if item.node.Parent != nil {
-						// Navigate to parent
-						m.selectNodeByID(item.node.Parent.ID)
+				if node := m.boardSelectedNode(); node != nil {
+					if node.Expanded && node.HasChildren() {
+						node.Collapse()
+						m.boardRebuildRows()
+					} else if node.Parent != nil {
+						m.boardSelectNodeByID(node.Parent.ID)
 					}
 				}
 				return m, nil
 
 			case "r":
-				// Manual refresh - reload tree from CLI
 				if !m.refreshing {
 					m.refreshing = true
 					return m, loadTree
@@ -355,17 +258,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 
 			case "g":
-				// Go to top
-				m.list.Select(0)
+				m.boardGoTop()
 				return m, nil
 
 			case "G":
-				// Go to bottom
-				m.list.Select(len(m.list.Items()) - 1)
+				m.boardGoBottom()
+				return m, nil
+
+			case "down":
+				m.boardMoveDown()
+				return m, nil
+
+			case "up":
+				m.boardMoveUp()
 				return m, nil
 
 			case "/", ".":
-				// Open command palette (. for Russian keyboard layout)
 				if m.logger != nil {
 					m.logger.Action("command_palette", "opened")
 				}
@@ -402,21 +310,46 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.currentScreen == BoardScreen {
 			switch msg.Button {
 			case tea.MouseButtonWheelUp:
-				m.list.CursorDown() // Natural scrolling (trackpad)
+				m.boardMoveDown() // Natural scrolling (trackpad)
 				return m, nil
 			case tea.MouseButtonWheelDown:
-				m.list.CursorUp() // Natural scrolling (trackpad)
+				m.boardMoveUp() // Natural scrolling (trackpad)
 				return m, nil
-			// MouseButtonLeft disabled until zones implemented (STORY-260205-23ol4w)
+			case tea.MouseButtonLeft:
+				// Tap opens detail for current cursor position
+				if node := m.boardSelectedNode(); node != nil {
+					id := node.ID
+					return m, func() tea.Msg { return OpenDetailMsg{ID: id} }
+				}
+				return m, nil
 			}
+		}
+		if m.currentScreen == AgentsScreen {
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				m.agentsModel.moveDown() // Natural scrolling (trackpad)
+				return m, nil
+			case tea.MouseButtonWheelDown:
+				m.agentsModel.moveUp() // Natural scrolling (trackpad)
+				return m, nil
+			case tea.MouseButtonLeft:
+				// Tap opens detail for current cursor position
+				if id := m.agentsModel.selectedElementID(); id != "" {
+					return m, func() tea.Msg { return OpenDetailMsg{ID: id} }
+				}
+				return m, nil
+			}
+		}
+		if m.currentScreen == DetailScreen {
+			// Forward mouse wheel to viewport for trackpad scrolling
+			var cmd tea.Cmd
+			m.detailModel, cmd = m.detailModel.Update(msg)
+			return m, cmd
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		h, v := appStyle.GetFrameSize()
-		// Reserve space for status bar (1 line)
-		m.list.SetSize(msg.Width-h, msg.Height-v-1)
 		m.settingsModel.SetSize(msg.Width, msg.Height)
 		m.detailModel.SetSize(msg.Width, msg.Height)
 		m.agentsModel.SetSize(msg.Width, msg.Height)
@@ -446,17 +379,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(expandedIDs) > 0 {
 			ApplyExpandedNodes(m.tree, expandedIDs)
 		}
-		m.refreshList()
+		m.boardRebuildRows()
 
 	case tickMsg:
 		// Auto-refresh based on current screen
 		if m.currentScreen == AgentsScreen {
 			// Refresh agents data
 			return m, tea.Batch(LoadAgentsWithFilter(m.getStaleMinutes()), m.tickCmd())
-		}
-		// Skip refresh if filter is active to preserve filter state
-		if m.list.FilterState() != list.Unfiltered {
-			return m, m.tickCmd() // Just reschedule, don't refresh
 		}
 		// Refresh board tree
 		m.refreshing = true
@@ -470,9 +399,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		return m, tea.Quit
 
+	case OpenDetailMsg:
+		// Shared intent: open detail from any screen
+		// Guard: trackpad tap can generate duplicate events — don't overwrite previousScreen
+		if m.currentScreen != DetailScreen {
+			m.previousScreen = m.currentScreen
+		}
+		m.detailModel = NewDetailModel()
+		m.detailModel.SetSize(m.width, m.height)
+		m.currentScreen = DetailScreen
+		return m, m.detailModel.LoadElement(msg.ID)
+
 	case DetailCloseMsg:
-		// Return to board screen from detail view
-		m.currentScreen = BoardScreen
+		// Return to the screen that opened detail
+		m.currentScreen = m.previousScreen
 		return m, nil
 
 	case elementLoadedMsg:
@@ -539,41 +479,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.executeCommand(msg.Command, msg.Args)
 	}
 
-	// Don't update list while quit dialog is shown
-	if m.confirmQuit {
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
-
-	// Track filter state changes to expand/collapse tree
-	isFiltering := m.list.FilterState() != list.Unfiltered
-	if isFiltering && !m.wasFiltering {
-		// Entering filter mode - save expanded state and expand all
-		m.preFilterExpandedIDs = CollectExpandedNodes(m.tree)
-		for _, root := range m.tree {
-			root.ExpandAll()
-		}
-		m.refreshList()
-	} else if !isFiltering && m.wasFiltering {
-		// Exiting filter mode - restore expanded state
-		if len(m.preFilterExpandedIDs) > 0 {
-			// First collapse all
-			for _, root := range m.tree {
-				root.CollapseAll()
-			}
-			// Then restore saved state
-			ApplyExpandedNodes(m.tree, m.preFilterExpandedIDs)
-		}
-		m.refreshList()
-	}
-	m.wasFiltering = isFiltering
-
-	return m, cmd
+	return m, nil
 }
 
-// refreshList updates the list items from the tree
 // executeCommand handles slash commands
 func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 	if m.logger != nil {
@@ -583,12 +491,9 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 	switch cmd {
 	case "filter":
 		if m.logger != nil {
-			m.logger.Command("filter", args, "activating list filter")
+			m.logger.Command("filter", args, "filter not yet implemented")
 		}
-		// Enable filtering and start filter mode
-		m.list.SetFilteringEnabled(true)
-		// Send "/" key to trigger filter mode
-		m.list, _ = m.list.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+		// TODO: implement custom filter (TASK-260206-2tovz9)
 		return m, nil
 
 	case "agents":
@@ -605,6 +510,7 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 			m.logger.Command("help", "", "showing help")
 		}
 		// Show help in detail view
+		m.previousScreen = m.currentScreen
 		m.detailModel = NewDetailModel()
 		m.detailModel.SetSize(m.width, m.height)
 		m.detailModel.SetHelpContent(m.commandModel.GetCommands())
@@ -637,7 +543,7 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 		for _, root := range m.tree {
 			root.ExpandAll()
 		}
-		m.refreshList()
+		m.boardRebuildRows()
 		return m, nil
 
 	case "collapse":
@@ -647,7 +553,7 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 		for _, root := range m.tree {
 			root.CollapseAll()
 		}
-		m.refreshList()
+		m.boardRebuildRows()
 		return m, nil
 
 	default:
@@ -668,42 +574,6 @@ func (m *model) getStaleMinutes() int {
 	return 0
 }
 
-func (m *model) refreshList() {
-	// Remember selected ID
-	var selectedID string
-	if item, ok := m.list.SelectedItem().(BoardItem); ok {
-		selectedID = item.node.ID
-	}
-
-	// Flatten tree to items
-	flatNodes := FlattenTree(m.tree)
-	items := make([]list.Item, len(flatNodes))
-	selectedIdx := 0
-
-	for i, fn := range flatNodes {
-		items[i] = BoardItem{
-			node:       fn.Node,
-			treePrefix: fn.TreePrefix,
-			depth:      fn.Depth,
-		}
-		if fn.Node.ID == selectedID {
-			selectedIdx = i
-		}
-	}
-
-	m.list.SetItems(items)
-	m.list.Select(selectedIdx)
-}
-
-// selectNodeByID selects the list item with the given node ID
-func (m *model) selectNodeByID(id string) {
-	for i, item := range m.list.Items() {
-		if bi, ok := item.(BoardItem); ok && bi.node.ID == id {
-			m.list.Select(i)
-			return
-		}
-	}
-}
 
 // saveConfigOnQuit saves the current configuration before quitting
 func (m *model) saveConfigOnQuit() {
@@ -748,33 +618,66 @@ func (m model) View() string {
 
 // viewBoard renders the main board view
 func (m model) viewBoard() string {
-	// Build status indicator
-	var statusIndicator string
+	// Title
+	title := titleStyle.Render(" Task Board ")
+
+	// Status indicator
+	var statusInfo string
 	if m.refreshing {
-		statusIndicator = statusBarStyle.Render(" Refreshing... ")
+		statusInfo = statusBarStyle.Render(" Refreshing... ")
 	} else if m.loadError != nil {
-		statusIndicator = lipgloss.NewStyle().
+		statusInfo = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FF4500")).
 			Render(fmt.Sprintf(" Offline (last update: %s) ", m.formatTimeSince()))
 	} else if !m.lastUpdate.IsZero() {
-		statusIndicator = statusBarStyle.Render(fmt.Sprintf(" Updated %s ", m.formatTimeSince()))
+		statusInfo = statusBarStyle.Render(fmt.Sprintf(" Updated %s ", m.formatTimeSince()))
 	}
 
-	// Add help text at the bottom
-	help := helpStyle.Render("\n  enter/o: open | space: toggle | /: commands | q: quit")
+	// Content rows
+	vh := m.boardVisibleHeight()
+	var content strings.Builder
 
-	// If command palette is active, show it as overlay
+	if len(m.boardRows) == 0 {
+		content.WriteString("  Loading board...\n")
+		for i := 1; i < vh; i++ {
+			content.WriteByte('\n')
+		}
+	} else {
+		end := m.boardScrollOff + vh
+		if end > len(m.boardRows) {
+			end = len(m.boardRows)
+		}
+		for i := m.boardScrollOff; i < end; i++ {
+			row := m.boardRows[i]
+			line := row.text
+			if i == m.boardSelectedIdx && row.selectable() {
+				plain := lipgloss.NewStyle().Width(m.width - 4).Render(line)
+				line = cursorStyle.Render(plain)
+			}
+			content.WriteString(line)
+			content.WriteByte('\n')
+		}
+		// Pad remaining lines
+		rendered := end - m.boardScrollOff
+		for i := rendered; i < vh; i++ {
+			content.WriteByte('\n')
+		}
+	}
+
+	// Help
+	help := helpStyle.Render("  ↑↓: navigate | enter/o: open | space: toggle | /: commands | q: quit")
+
+	// Command palette overlay
 	if m.commandModel.IsActive() {
-		return appStyle.Render(m.list.View() + "\n\n" + m.commandModel.View())
+		return appStyle.Render(title + statusInfo + "\n\n" + content.String() + "\n" + m.commandModel.View())
 	}
 
-	// Show quit confirmation dialog
+	// Quit confirmation overlay
 	if m.confirmQuit {
-		dialog := m.renderQuitDialog()
-		return appStyle.Render(m.list.View() + "\n\n" + dialog)
+		return appStyle.Render(title + statusInfo + "\n\n" + content.String() + "\n" + m.renderQuitDialog())
 	}
 
-	return appStyle.Render(m.list.View() + statusIndicator + help)
+	return appStyle.Render(title + statusInfo + "\n\n" + content.String() + help)
 }
 
 // renderQuitDialog renders the quit confirmation dialog
@@ -962,19 +865,7 @@ func main() {
 
 	logger.Info("Config loaded, refresh interval: %v", refreshInterval)
 
-	// Create list with custom delegate
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = true
-
-	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.Title = "Task Board"
-	l.SetShowStatusBar(true)
-	l.SetFilteringEnabled(false) // Using custom command palette instead
-	l.InfiniteScrolling = false // Disable wrap-around navigation
-	l.Styles.Title = titleStyle
-
 	m := model{
-		list:            l,
 		refreshInterval: refreshInterval,
 		config:          cfg,
 		logger:          logger,

@@ -28,3 +28,4 @@ Thumbs.db
 
 # Project temp
 .temp/
+.task-board/logs

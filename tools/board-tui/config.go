@@ -20,13 +20,16 @@ type Config struct {
 	ExpandedNodes []string `json:"expandedNodes"`
 	// AgentsFilter is the filter mode for agents display (0=all, 1-5 = stale minutes index)
 	AgentsFilter int `json:"agentsFilter"`
+	// ScrollSensitivity controls trackpad scroll speed (0.1 = very smooth, 1.0 = instant)
+	ScrollSensitivity float64 `json:"scrollSensitivity"`
 }
 
 // DefaultConfig returns a Config with default values
 func DefaultConfig() *Config {
 	return &Config{
-		RefreshRate:   DefaultRefreshRate,
-		ExpandedNodes: []string{},
+		RefreshRate:       DefaultRefreshRate,
+		ExpandedNodes:     []string{},
+		ScrollSensitivity: 0.5,
 	}
 }
 
