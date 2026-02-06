@@ -42,29 +42,29 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	return tuiCmd.Run()
 }
 
-// findTUIBinary locates the board-tui binary
+// findTUIBinary locates the task-board-tui binary
 func findTUIBinary() (string, error) {
 	// 1. Check next to this binary
 	if execPath, err := os.Executable(); err == nil {
 		dir := filepath.Dir(execPath)
-		candidate := filepath.Join(dir, "board-tui")
+		candidate := filepath.Join(dir, "task-board-tui")
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
 	}
 
 	// 2. Check in PATH
-	if path, err := exec.LookPath("board-tui"); err == nil {
+	if path, err := exec.LookPath("task-board-tui"); err == nil {
 		return path, nil
 	}
 
 	// 3. Check ~/.local/bin
 	if home, err := os.UserHomeDir(); err == nil {
-		candidate := filepath.Join(home, ".local", "bin", "board-tui")
+		candidate := filepath.Join(home, ".local", "bin", "task-board-tui")
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
 	}
 
-	return "", fmt.Errorf("board-tui binary not found\n\nInstall it with:\n  cd tools/board-tui && swift build -c release\n  cp .build/release/board-tui ~/.local/bin/")
+	return "", fmt.Errorf("task-board-tui binary not found\n\nInstall it with:\n  cd tools/board-tui && go build -o task-board-tui .\n  cp task-board-tui ~/.local/bin/\n\nOr run: ./scripts/setup.sh")
 }

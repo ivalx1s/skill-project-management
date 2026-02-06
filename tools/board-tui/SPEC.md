@@ -58,7 +58,7 @@ Primary screen showing the task board hierarchy.
 
 ### 2. Settings Screen
 
-Configuration screen inspired by Claude Code settings.
+Configuration screen with grouped settings and inline editing.
 
 **Layout:**
 ```

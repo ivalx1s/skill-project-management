@@ -1,10 +1,14 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents when working with code in this repository.
 
 ## What This Is
 
-A file-based project management skill for AI agents. Provides a Go CLI tool (`task-board`) that manages hierarchical task boards (Epic → Story → Task/Bug) stored as directories and markdown files in `.task-board/`. Includes a planner (dependency graph, phases, Graphviz rendering) and agent tracking (assign, dashboard). Everything lives in git, no external dependencies.
+A file-based project management skill for AI agents. Two Go binaries:
+- **`task-board`** (CLI) — manages hierarchical task boards (Epic → Story → Task/Bug) stored as directories and markdown files in `.task-board/`. Includes a planner (dependency graph, phases, Graphviz rendering) and agent tracking (assign, dashboard).
+- **`task-board-tui`** (TUI) — interactive terminal dashboard built with bubbletea/lipgloss. Board view, agents dashboard, element detail, settings, command palette.
+
+Everything lives in git, no external dependencies.
 
 ## Setup
 
@@ -12,26 +16,27 @@ A file-based project management skill for AI agents. Provides a Go CLI tool (`ta
 ./scripts/setup.sh
 ```
 
-Installs Go (via Homebrew), builds the binary, symlinks `task-board` to `~/.local/bin/`.
+Installs Go (via Homebrew), builds both binaries, symlinks `task-board` and `task-board-tui` to `~/.local/bin/`.
 
 ## Build & Test
 
-All commands run from `tools/board-cli/`:
+CLI — from `tools/board-cli/`:
 
 ```bash
-# Build
 go build -o task-board .
-
-# Run all tests
-go test ./...
-
-# Run tests verbose
 go test ./... -v
+```
 
-# Run a single test
-go test ./cmd -run TestCreateEpic -v
+TUI — from `tools/board-tui/`:
 
-# Lint
+```bash
+go build -o task-board-tui .
+go test ./... -v
+```
+
+Lint (both):
+
+```bash
 go fmt ./...
 go vet ./...
 ```
@@ -39,7 +44,7 @@ go vet ./...
 ## Architecture
 
 ```
-tools/board-cli/
+tools/board-cli/                     # CLI (task-board)
 ├── main.go              # Entry point, calls cmd.Execute()
 ├── cmd/                 # Cobra command handlers (one file per command)
 │   ├── create.go        # create epic/story/task/bug
@@ -49,6 +54,7 @@ tools/board-cli/
 │   ├── assign.go        # assign element to agent
 │   ├── unassign.go      # unassign element
 │   ├── agents.go        # agents dashboard with --stale, --all
+│   ├── tui.go           # launches task-board-tui binary
 │   ├── progress.go      # status, checklist, notes
 │   └── ...              # list, show, summary, search, validate, move, delete, update
 ├── internal/
@@ -67,6 +73,18 @@ tools/board-cli/
 │   └── output/
 │       └── format.go    # Colorized terminal table rendering
 └── templates/           # Embedded Go templates for README.md and progress.md per element type
+
+tools/board-tui/                     # TUI dashboard (task-board-tui)
+├── main.go              # Entry point, bubbletea model, screen routing
+├── board.go             # Board screen: row model, navigation, rendering
+├── agents.go            # Agents dashboard screen
+├── detail.go            # Element detail view with markdown rendering
+├── settings.go          # Settings screen (refresh, agents filter, scroll sensitivity)
+├── command.go           # Command palette (slash commands)
+├── mouse.go             # Mouse/trackpad scroll with sensitivity accumulator
+├── config.go            # Persisted config (~/.config/board-tui/config.json)
+├── tree.go              # Tree data model, expand/collapse, flatten
+└── logger.go            # Session logger
 ```
 
 **Key design decisions:**

@@ -1,14 +1,16 @@
 #!/usr/bin/env zsh
 #
 # Setup script for project-management skill.
-# Installs Go (if missing), builds the CLI, symlinks to PATH.
+# Installs Go (if missing), builds CLI + TUI, symlinks to PATH.
 #
 
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CLI_DIR="$SKILL_DIR/tools/board-cli"
-BINARY="$CLI_DIR/task-board"
+TUI_DIR="$SKILL_DIR/tools/board-tui"
+CLI_BINARY="$CLI_DIR/task-board"
+TUI_BINARY="$TUI_DIR/task-board-tui"
 BIN_DIR="$HOME/.local/bin"
 
 # --- Colors ---
@@ -36,32 +38,44 @@ install_go() {
 
 # --- 2. Build CLI ---
 build_cli() {
-  green "Building task-board..."
+  green "Building task-board (CLI)..."
   cd "$CLI_DIR"
   go build -o task-board .
-  green "Built: $BINARY"
+  green "Built: $CLI_BINARY"
+}
+
+# --- 2b. Build TUI ---
+build_tui() {
+  green "Building task-board-tui (TUI)..."
+  cd "$TUI_DIR"
+  go build -o task-board-tui .
+  green "Built: $TUI_BINARY"
 }
 
 # --- 3. Symlink to PATH ---
-symlink_cli() {
+symlink_binary() {
+  local name="$1"
+  local target="$2"
+  local link="$BIN_DIR/$name"
+
   mkdir -p "$BIN_DIR"
 
-  if [[ -L "$BIN_DIR/task-board" ]]; then
+  if [[ -L "$link" ]]; then
     local existing
-    existing="$(readlink "$BIN_DIR/task-board")"
-    if [[ "$existing" == "$BINARY" ]]; then
-      green "Symlink already correct: $BIN_DIR/task-board -> $BINARY"
+    existing="$(readlink "$link")"
+    if [[ "$existing" == "$target" ]]; then
+      green "Symlink already correct: $link -> $target"
       return
     fi
     yellow "Updating symlink (was: $existing)"
-    rm "$BIN_DIR/task-board"
-  elif [[ -e "$BIN_DIR/task-board" ]]; then
-    red "$BIN_DIR/task-board exists and is not a symlink. Skipping."
+    rm "$link"
+  elif [[ -e "$link" ]]; then
+    red "$link exists and is not a symlink. Skipping."
     return
   fi
 
-  ln -s "$BINARY" "$BIN_DIR/task-board"
-  green "Symlinked: $BIN_DIR/task-board -> $BINARY"
+  ln -s "$target" "$link"
+  green "Symlinked: $link -> $target"
 }
 
 # --- 4. Verify PATH ---
@@ -79,6 +93,11 @@ verify() {
   else
     yellow "task-board not found in PATH. Check PATH settings."
   fi
+  if command -v task-board-tui &>/dev/null; then
+    green "Verified: task-board-tui available"
+  else
+    yellow "task-board-tui not found in PATH. Check PATH settings."
+  fi
 }
 
 # --- Run ---
@@ -87,7 +106,9 @@ green "=== project-management skill setup ==="
 print ""
 install_go
 build_cli
-symlink_cli
+build_tui
+symlink_binary "task-board" "$CLI_BINARY"
+symlink_binary "task-board-tui" "$TUI_BINARY"
 check_path
 verify
 print ""

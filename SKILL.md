@@ -565,7 +565,7 @@ task-board validate
 
 ## Setup
 
-Run the setup script to install dependencies, build the CLI, and symlink to PATH:
+Run the setup script to install dependencies, build both binaries, and symlink to PATH:
 
 ```bash
 ./scripts/setup.sh
@@ -573,16 +573,32 @@ Run the setup script to install dependencies, build the CLI, and symlink to PATH
 
 The script will:
 1. **Install Go** via Homebrew (if not present)
-2. **Build** `task-board` binary from source
-3. **Symlink** to `~/.local/bin/task-board`
+2. **Build** `task-board` (CLI) and `task-board-tui` (TUI) binaries
+3. **Symlink** both to `~/.local/bin/`
 4. **Verify** PATH and installation
 
 ### Manual Build
 
 ```bash
+# CLI
 cd tools/board-cli
 go build -o task-board .
+
+# TUI
+cd tools/board-tui
+go build -o task-board-tui .
 ```
+
+### Interactive TUI
+
+Launch the interactive dashboard:
+
+```bash
+task-board tui          # via CLI subcommand
+task-board-tui          # directly
+```
+
+Features: board tree view, agents dashboard, element detail, settings (refresh rate, agents filter, scroll sensitivity), command palette (/ or .).
 
 ---
 ---

@@ -17,13 +17,20 @@ File-based project management for AI agents. Go CLI tool (`task-board`) that man
 ./scripts/setup.sh
 ```
 
-Installs Go (via Homebrew), builds the `task-board` binary, symlinks to `~/.local/bin/task-board`.
+Installs Go (via Homebrew), builds both binaries, symlinks to `~/.local/bin/`:
+- `task-board` — CLI tool
+- `task-board-tui` — interactive TUI dashboard
 
 ### Manual Build
 
 ```bash
+# CLI
 cd tools/board-cli
 go build -o task-board .
+
+# TUI
+cd tools/board-tui
+go build -o task-board-tui .
 ```
 
 ### Requirements
@@ -33,7 +40,7 @@ go build -o task-board .
 
 ## AI Agent Skill Setup
 
-This repo is an AI agent skill compatible with Claude Code, Codex CLI, and similar tools.
+This repo is an AI agent skill compatible with coding agents (Claude Code, Codex CLI, and similar tools).
 
 ### With `~/.agents/` infrastructure
 
@@ -50,8 +57,8 @@ mkdir -p ~/.agents/skills
 ln -s ~/src/skill-project-management ~/.agents/skills/project-management
 
 # Symlink to agent tools
-ln -s ~/.agents/skills/project-management ~/.claude/skills/project-management  # Claude Code
-ln -s ~/.agents/skills/project-management ~/.codex/skills/project-management   # Codex CLI
+ln -s ~/.agents/skills/project-management ~/.claude/skills/project-management  # Claude Code (CLAUDE.md)
+ln -s ~/.agents/skills/project-management ~/.codex/skills/project-management   # Codex CLI (AGENTS.md)
 ```
 
 The `~/.agents/` pattern:
@@ -121,6 +128,7 @@ task-board agents
 | `unassign ID` | Remove assignment |
 | `agents` | Show sub-agent dashboard |
 | `agents --stale N` | Set freshness window (minutes) |
+| `tui` | Launch interactive TUI dashboard |
 | `list epics/stories/tasks/bugs` | List elements (with `--status`, `--story` filters) |
 | `summary` | Board overview |
 | `search "regex"` | Search board content |
@@ -152,7 +160,7 @@ task-board agents
 
 | Tool | Purpose | Commands | Output |
 |------|---------|----------|--------|
-| Go | CLI binary build/test | `go build`, `go test ./...` | `tools/board-cli/task-board` |
+| Go | CLI + TUI build/test | `go build`, `go test ./...` | `tools/board-cli/task-board`, `tools/board-tui/task-board-tui` |
 | Graphviz | Graph rendering | `dot -Tpng -o out.png in.dot` | `.task-board/**/.temp/plan*.{svg,png}` |
 | Homebrew | Dependency management | `brew install go graphviz` | — |
 
@@ -162,19 +170,32 @@ task-board agents
 |------|-------------|
 | `SKILL.md` | Full skill specification — CLI reference, file formats, workflows, agent development cycle |
 | `SPEC.md` | Product requirements — planner (R1-R5), agent tracking (R6-R7) |
-| `CLAUDE.md` | Claude Code guidance — build/test commands, architecture |
+| `CLAUDE.md` | Agent guidance — build/test commands, architecture |
 | `scripts/setup.sh` | One-command setup script |
 | `tools/board-cli/` | Go source code for `task-board` CLI |
+| `tools/board-tui/` | Go source code for `task-board-tui` interactive dashboard |
 
 ## Architecture
 
 ```
-tools/board-cli/
+tools/board-cli/                 # CLI (task-board)
 ├── main.go              # Entry point
-├── cmd/                 # Cobra commands (create, plan, agents, link, etc.)
+├── cmd/                 # Cobra commands (create, plan, agents, tui, link, etc.)
 ├── internal/
 │   ├── board/           # Core domain: board loader, elements, progress, dependencies
 │   ├── plan/            # Planner: graph builder, toposort, DOT generator, renderer
 │   └── output/          # Terminal formatting: colored tables, status badges
 └── templates/           # Embedded Go templates for README.md and progress.md
+
+tools/board-tui/                 # TUI dashboard (task-board-tui)
+├── main.go              # Entry point, bubbletea model, screen routing
+├── board.go             # Board screen: row model, navigation, rendering
+├── agents.go            # Agents dashboard screen
+├── detail.go            # Element detail view with markdown rendering
+├── settings.go          # Settings screen (refresh rate, agents filter, scroll sensitivity)
+├── command.go           # Command palette (slash commands)
+├── mouse.go             # Mouse/trackpad scroll with sensitivity accumulator
+├── config.go            # Persisted config (~/.config/board-tui/config.json)
+├── tree.go              # Tree data model, expand/collapse, flatten
+└── logger.go            # Session logger
 ```
