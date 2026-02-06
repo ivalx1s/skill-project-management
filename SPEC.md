@@ -302,6 +302,21 @@ task-board progress status TASK-13 development
 
 ---
 
+## Part 2b: CLI Housekeeping
+
+### R10: Version Flag
+
+`task-board --version` — prints binary version and exits.
+
+Version format and embedding strategy TBD (Go ldflags, embed, git describe, etc.).
+
+```bash
+task-board --version
+# task-board v0.3.0 (abc1234)
+```
+
+---
+
 ## Part 3: Sub-Agents (Agent Tracking)
 
 ### Overview
