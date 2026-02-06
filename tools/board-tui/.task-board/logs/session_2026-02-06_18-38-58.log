@@ -1,0 +1,21 @@
+=====================================
+=== SESSION START: 2026-02-06_18-38-58 ===
+Time: 2026-02-06T18:38:58+03:00
+Working dir: /Users/aagrigore1/src/skill-project-management/tools/board-tui
+=====================================
+
+[18:38:58.419] [INFO] Config loaded, refresh interval: 5s
+[18:39:02.698] [INFO] [ACTION] command_palette: opened
+[18:39:08.547] [DEBUG] [KEY] arkanoid
+[18:39:08.547] [DEBUG] [STATE] command_palette active, input: ""
+[18:39:08.547] [DEBUG] [KEY] enter
+[18:39:08.547] [DEBUG] [STATE] command_palette active, input: "arkanoid"
+[18:39:08.547] [INFO] CommandExecuteMsg received: cmd="arkanoid" args=""
+[18:39:08.547] [INFO] executeCommand: cmd="arkanoid" args=""
+[18:39:08.547] [INFO] [CMD] /arkanoid → opening arkanoid screen
+[18:39:36.859] [INFO] Saving config and closing session
+
+=== SESSION END ===
+Duration: 38s
+Total actions: 10
+=====================================

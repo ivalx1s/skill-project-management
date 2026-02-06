@@ -1,10 +1,18 @@
 package main
 
 import (
+	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+const (
+	scrollSensitivityStep = 0.05
+	scrollBarWidth        = 20
 )
 
 // RefreshOption represents a selectable option with duration
@@ -15,14 +23,8 @@ type RefreshOption struct {
 
 // AgentsFilterOption represents an agents filter option
 type AgentsFilterOption struct {
-	Label       string
+	Label        string
 	StaleMinutes int // 0 = all
-}
-
-// ScrollOption represents a scroll sensitivity option
-type ScrollOption struct {
-	Label       string
-	Sensitivity float64
 }
 
 // SettingsGroup represents which settings group is focused
@@ -47,9 +49,14 @@ type SettingsModel struct {
 	agentsSelected int
 
 	// Scroll sensitivity settings
-	scrollOptions  []ScrollOption
-	scrollCursor   int
-	scrollSelected int
+	scrollSensitivity      float64
+	scrollDraftSensitivity float64
+	scrollEditing          bool
+
+	// Initial values (for changed flags)
+	initialRefreshSelected int
+	initialAgentsSelected  int
+	initialScroll          float64
 
 	// UI state
 	focusGroup SettingsGroup
@@ -128,35 +135,21 @@ func DefaultAgentsOptions() []AgentsFilterOption {
 	}
 }
 
-// DefaultScrollOptions returns the available scroll sensitivity options
-func DefaultScrollOptions() []ScrollOption {
-	return []ScrollOption{
-		{Label: "0.1 (very smooth)", Sensitivity: 0.1},
-		{Label: "0.2", Sensitivity: 0.2},
-		{Label: "0.3", Sensitivity: 0.3},
-		{Label: "0.5 (default)", Sensitivity: 0.5},
-		{Label: "0.7", Sensitivity: 0.7},
-		{Label: "1.0 (instant)", Sensitivity: 1.0},
-	}
-}
-
 // NewSettingsModel creates a new settings model
 func NewSettingsModel(currentInterval time.Duration, onSave func(time.Duration)) SettingsModel {
-	return NewSettingsModelFull(currentInterval, 0, 0.5, onSave)
+	return NewSettingsModelFull(currentInterval, 0, DefaultScrollSensitivity, onSave)
 }
 
 // NewSettingsModelWithAgents creates a new settings model with agents filter
 func NewSettingsModelWithAgents(currentInterval time.Duration, agentsFilter int, onSave func(time.Duration)) SettingsModel {
-	return NewSettingsModelFull(currentInterval, agentsFilter, 0.5, onSave)
+	return NewSettingsModelFull(currentInterval, agentsFilter, DefaultScrollSensitivity, onSave)
 }
 
 // NewSettingsModelFull creates a new settings model with all parameters
 func NewSettingsModelFull(currentInterval time.Duration, agentsFilter int, scrollSensitivity float64, onSave func(time.Duration)) SettingsModel {
 	refreshOptions := DefaultRefreshOptions()
 	agentsOptions := DefaultAgentsOptions()
-	scrollOptions := DefaultScrollOptions()
 
-	// Find selected refresh option
 	refreshSelected := 1 // Default to "10 seconds"
 	for i, opt := range refreshOptions {
 		if opt.Duration == currentInterval {
@@ -165,33 +158,27 @@ func NewSettingsModelFull(currentInterval time.Duration, agentsFilter int, scrol
 		}
 	}
 
-	// Agents filter selection
 	agentsSelected := agentsFilter
 	if agentsSelected >= len(agentsOptions) {
 		agentsSelected = 0
 	}
 
-	// Find selected scroll option
-	scrollSelected := 3 // Default to "0.5"
-	for i, opt := range scrollOptions {
-		if opt.Sensitivity == scrollSensitivity {
-			scrollSelected = i
-			break
-		}
-	}
+	scrollSensitivity = ClampScrollSensitivity(scrollSensitivity)
 
 	return SettingsModel{
-		refreshOptions:  refreshOptions,
-		refreshCursor:   refreshSelected,
-		refreshSelected: refreshSelected,
-		agentsOptions:   agentsOptions,
-		agentsCursor:    agentsSelected,
-		agentsSelected:  agentsSelected,
-		scrollOptions:   scrollOptions,
-		scrollCursor:    scrollSelected,
-		scrollSelected:  scrollSelected,
-		focusGroup:      GroupRefresh,
-		onSave:          onSave,
+		refreshOptions:         refreshOptions,
+		refreshCursor:          refreshSelected,
+		refreshSelected:        refreshSelected,
+		agentsOptions:          agentsOptions,
+		agentsCursor:           agentsSelected,
+		agentsSelected:         agentsSelected,
+		scrollSensitivity:      scrollSensitivity,
+		scrollDraftSensitivity: scrollSensitivity,
+		focusGroup:             GroupRefresh,
+		initialRefreshSelected: refreshSelected,
+		initialAgentsSelected:  agentsSelected,
+		initialScroll:          scrollSensitivity,
+		onSave:                 onSave,
 	}
 }
 
@@ -202,12 +189,12 @@ func (m SettingsModel) Init() tea.Cmd {
 
 // SettingsCloseMsg is sent when the settings screen should close
 type SettingsCloseMsg struct {
-	NewInterval         time.Duration
-	NewAgentsFilter     int
+	NewInterval          time.Duration
+	NewAgentsFilter      int
 	NewScrollSensitivity float64
-	RefreshChanged      bool
-	AgentsChanged       bool
-	ScrollChanged       bool
+	RefreshChanged       bool
+	AgentsChanged        bool
+	ScrollChanged        bool
 }
 
 // Update handles input for the settings model
@@ -216,22 +203,63 @@ func (m SettingsModel) Update(msg tea.Msg) (SettingsModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
-			m.moveCursorUp()
+			if !m.scrollEditing {
+				m.moveCursorUp()
+			}
 		case "down", "j":
-			m.moveCursorDown()
-		case "tab", "right", "l":
-			m.nextGroup()
-		case "shift+tab", "left", "h":
-			m.prevGroup()
+			if !m.scrollEditing {
+				m.moveCursorDown()
+			}
+		case "tab":
+			if !m.scrollEditing {
+				m.nextGroup()
+			}
+		case "right", "l":
+			if m.focusGroup == GroupScroll && m.scrollEditing {
+				m.adjustScrollDraft(scrollSensitivityStep)
+				return m, nil
+			}
+			if !m.scrollEditing {
+				m.nextGroup()
+			}
+		case "shift+tab":
+			if !m.scrollEditing {
+				m.prevGroup()
+			}
+		case "left", "h":
+			if m.focusGroup == GroupScroll && m.scrollEditing {
+				m.adjustScrollDraft(-scrollSensitivityStep)
+				return m, nil
+			}
+			if !m.scrollEditing {
+				m.prevGroup()
+			}
 		case "enter", " ":
+			if m.focusGroup == GroupScroll {
+				if !m.scrollEditing {
+					m.scrollEditing = true
+					m.scrollDraftSensitivity = m.scrollSensitivity
+					return m, nil
+				}
+				m.scrollEditing = false
+				m.scrollSensitivity = m.scrollDraftSensitivity
+				return m, m.closeCmd()
+			}
 			return m.selectCurrent()
 		case "esc", "q":
+			if m.scrollEditing {
+				m.scrollEditing = false
+				m.scrollDraftSensitivity = m.scrollSensitivity
+				return m, nil
+			}
 			return m, func() tea.Msg {
 				return SettingsCloseMsg{
-					NewInterval:     m.refreshOptions[m.refreshSelected].Duration,
-					NewAgentsFilter: m.agentsSelected,
-					RefreshChanged:  false,
-					AgentsChanged:   false,
+					NewInterval:          m.refreshOptions[m.refreshSelected].Duration,
+					NewAgentsFilter:      m.agentsSelected,
+					NewScrollSensitivity: m.scrollSensitivity,
+					RefreshChanged:       false,
+					AgentsChanged:        false,
+					ScrollChanged:        false,
 				}
 			}
 		}
@@ -254,10 +282,6 @@ func (m *SettingsModel) moveCursorUp() {
 		if m.agentsCursor > 0 {
 			m.agentsCursor--
 		}
-	case GroupScroll:
-		if m.scrollCursor > 0 {
-			m.scrollCursor--
-		}
 	}
 }
 
@@ -270,10 +294,6 @@ func (m *SettingsModel) moveCursorDown() {
 	case GroupAgents:
 		if m.agentsCursor < len(m.agentsOptions)-1 {
 			m.agentsCursor++
-		}
-	case GroupScroll:
-		if m.scrollCursor < len(m.scrollOptions)-1 {
-			m.scrollCursor++
 		}
 	}
 }
@@ -296,10 +316,24 @@ func (m *SettingsModel) prevGroup() {
 	}
 }
 
-func (m SettingsModel) selectCurrent() (SettingsModel, tea.Cmd) {
-	oldRefresh := m.refreshSelected
-	oldAgents := m.agentsSelected
+func (m *SettingsModel) adjustScrollDraft(delta float64) {
+	m.scrollDraftSensitivity = ClampScrollSensitivity(m.scrollDraftSensitivity + delta)
+	m.scrollDraftSensitivity = math.Round(m.scrollDraftSensitivity*100) / 100
+}
 
+func (m SettingsModel) closeCmd() tea.Cmd {
+	msg := SettingsCloseMsg{
+		NewInterval:          m.refreshOptions[m.refreshSelected].Duration,
+		NewAgentsFilter:      m.agentsSelected,
+		NewScrollSensitivity: m.scrollSensitivity,
+		RefreshChanged:       m.initialRefreshSelected != m.refreshSelected,
+		AgentsChanged:        m.initialAgentsSelected != m.agentsSelected,
+		ScrollChanged:        math.Abs(m.initialScroll-m.scrollSensitivity) > 0.0001,
+	}
+	return func() tea.Msg { return msg }
+}
+
+func (m SettingsModel) selectCurrent() (SettingsModel, tea.Cmd) {
 	switch m.focusGroup {
 	case GroupRefresh:
 		m.refreshSelected = m.refreshCursor
@@ -310,14 +344,7 @@ func (m SettingsModel) selectCurrent() (SettingsModel, tea.Cmd) {
 		m.agentsSelected = m.agentsCursor
 	}
 
-	return m, func() tea.Msg {
-		return SettingsCloseMsg{
-			NewInterval:     m.refreshOptions[m.refreshSelected].Duration,
-			NewAgentsFilter: m.agentsSelected,
-			RefreshChanged:  oldRefresh != m.refreshSelected,
-			AgentsChanged:   oldAgents != m.agentsSelected,
-		}
-	}
+	return m, m.closeCmd()
 }
 
 // View renders the settings screen
@@ -326,15 +353,22 @@ func (m SettingsModel) View() string {
 
 	s += settingsTitleStyle.Render("Settings") + "\n\n"
 
-	// Render two groups side by side
-	leftCol := m.renderRefreshGroup()
-	rightCol := m.renderAgentsGroup()
-
-	// Join columns horizontally with spacing
-	columns := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "    ", rightCol)
+	refreshCol := m.renderRefreshGroup()
+	agentsCol := m.renderAgentsGroup()
+	scrollCol := m.renderScrollGroup()
+	columns := lipgloss.JoinHorizontal(lipgloss.Top, refreshCol, "    ", agentsCol, "    ", scrollCol)
 	s += columns
 
-	s += settingsHelpStyle.Render("\n\n  ↑/↓ navigate • ←/→/Tab switch group • Enter select • Esc back")
+	help := "\n\n  ↑/↓ navigate • ←/→/Tab switch group • Enter select • Esc back"
+	if m.focusGroup == GroupScroll {
+		if m.scrollEditing {
+			help = "\n\n  ←/→ adjust sensitivity • Enter apply • Esc cancel edit"
+		} else {
+			help = "\n\n  Enter edit sensitivity • ←/→/Tab switch group • Esc back"
+		}
+	}
+
+	s += settingsHelpStyle.Render(help)
 
 	return settingsContainerStyle.Render(s)
 }
@@ -421,6 +455,53 @@ func (m SettingsModel) renderAgentsGroup() string {
 	}
 
 	return s
+}
+
+func (m SettingsModel) renderScrollGroup() string {
+	var s strings.Builder
+	active := m.focusGroup == GroupScroll
+
+	if active {
+		s.WriteString(settingsHeaderStyle.Render("Scroll Sensitivity") + "\n")
+	} else {
+		s.WriteString(settingsHeaderInactiveStyle.Render("Scroll Sensitivity") + "\n")
+	}
+
+	value := m.scrollSensitivity
+	if m.scrollEditing {
+		value = m.scrollDraftSensitivity
+	}
+
+	ratio := (ClampScrollSensitivity(value) - MinScrollSensitivity) / (MaxScrollSensitivity - MinScrollSensitivity)
+	filled := int(math.Round(ratio * float64(scrollBarWidth)))
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > scrollBarWidth {
+		filled = scrollBarWidth
+	}
+	bar := "[" + strings.Repeat("█", filled) + strings.Repeat("░", scrollBarWidth-filled) + "]"
+
+	valueLine := fmt.Sprintf("%.2f", value)
+	if m.scrollEditing {
+		valueLine += " (editing)"
+	}
+
+	lineStyle := settingsOptionInactiveStyle
+	if active {
+		if m.scrollEditing {
+			lineStyle = settingsSelectedStyle
+		} else {
+			lineStyle = settingsOptionStyle
+		}
+	}
+
+	s.WriteString(lineStyle.Render(bar) + "\n")
+	s.WriteString(lineStyle.Render("value: "+valueLine) + "\n")
+	s.WriteString(settingsOptionInactiveStyle.Render("range: 0.10 .. 1.00") + "\n")
+	s.WriteString(settingsOptionInactiveStyle.Render("default: 0.50 | baseline: 0.85") + "\n")
+
+	return s.String()
 }
 
 // GetSelectedDuration returns the currently selected refresh duration

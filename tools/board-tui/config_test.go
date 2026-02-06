@@ -21,6 +21,10 @@ func TestDefaultConfig(t *testing.T) {
 	if len(cfg.ExpandedNodes) != 0 {
 		t.Errorf("expected empty ExpandedNodes, got %v", cfg.ExpandedNodes)
 	}
+
+	if cfg.ScrollSensitivity != DefaultScrollSensitivity {
+		t.Errorf("expected ScrollSensitivity=%v, got %v", DefaultScrollSensitivity, cfg.ScrollSensitivity)
+	}
 }
 
 func TestGetRefreshDuration(t *testing.T) {
@@ -286,5 +290,17 @@ func TestLoadConfigFromPath_InvalidJSON(t *testing.T) {
 	// Should still return default config
 	if cfg.RefreshRate != DefaultRefreshRate {
 		t.Errorf("expected default RefreshRate=%d on error, got %d", DefaultRefreshRate, cfg.RefreshRate)
+	}
+}
+
+func TestClampScrollSensitivity(t *testing.T) {
+	if ClampScrollSensitivity(0.01) != MinScrollSensitivity {
+		t.Fatalf("expected lower clamp to %v", MinScrollSensitivity)
+	}
+	if ClampScrollSensitivity(2.0) != MaxScrollSensitivity {
+		t.Fatalf("expected upper clamp to %v", MaxScrollSensitivity)
+	}
+	if ClampScrollSensitivity(0.85) != 0.85 {
+		t.Fatalf("expected in-range sensitivity to be unchanged")
 	}
 }

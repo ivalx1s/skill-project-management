@@ -82,6 +82,40 @@ Configuration screen inspired by Claude Code settings.
 - **Refresh Rate**: Auto-refresh interval for board data
   - Options: 5s, 10s (default), 30s, 60s, Off
   - Persisted to config file (`~/.config/board-tui/config.json`)
+- **Agents Display**: Filter agents by stale window
+  - Options: all, stale > 5/10/15/30/60 min
+- **Scroll Sensitivity**: Runtime wheel/trackpad vertical speed for Board and Agents lists
+  - Range: 0.1 to 1.0 (default 0.5)
+  - Baseline calibration: 0.85 equals legacy scroll speed
+  - Edit flow: Enter (edit) → Left/Right (adjust) → Enter (commit)
+
+### 3. Arkanoid Screen
+
+Mini-game screen opened from the command palette using `/arkanoid`.
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────┐
+│  Arkanoid                                  Score/Lives │
+├─────────────────────────────────────────────────────────┤
+│  ┌───────────────────────────────────────────────────┐  │
+│  │ ███ ███   ███ ███ ███ ███   ███ ███ ███          │  │
+│  │   ... randomized brick pattern per run ...       │  │
+│  │                                                   │  │
+│  │                          ●                        │  │
+│  │                 =========                         │  │
+│  └───────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────┤
+│  ←/→ move paddle │ r restart │ Esc back to board       │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Features:**
+- Randomized block pattern on start/restart
+- Real-time ball physics with wall/paddle/brick collisions
+- Score and lives counters
+- Paddle movement by horizontal trackpad swipe (`wheel-left` / `wheel-right`)
+- In-game restart (`r`) and fast exit (`Esc`)
 
 ---
 
@@ -125,7 +159,16 @@ Board data automatically refreshes at configured interval.
 | `h` / `←` | Collapse node / Go to parent |
 | `g` | Go to top |
 | `G` | Go to bottom |
-| `/` | Search / Filter |
+| `/` / `.` | Open command palette |
+
+### Arkanoid View
+
+| Key | Action |
+|-----|--------|
+| `←` / `h` | Move paddle left |
+| `→` / `l` | Move paddle right |
+| `r` | Restart game with new random bricks |
+| `Esc` | Return to Board |
 
 ### Settings View
 
@@ -133,7 +176,9 @@ Board data automatically refreshes at configured interval.
 |-----|--------|
 | `j` / `↓` | Move cursor down |
 | `k` / `↑` | Move cursor up |
-| `Enter` / `Space` | Select option |
+| `Enter` / `Space` | Select option (Refresh/Agents) |
+| `Enter` (Scroll group) | Toggle edit/commit sensitivity |
+| `←` / `→` (while editing) | Decrease/increase sensitivity |
 | `Esc` | Back to Board |
 
 ---
@@ -183,13 +228,15 @@ Bottom bar showing context and controls.
 ```json
 {
   "refreshRate": 10,
-  "expandedNodes": ["EPIC-001", "STORY-001"]
+  "expandedNodes": ["EPIC-001", "STORY-001"],
+  "scrollSensitivity": 0.5
 }
 ```
 
 **Fields:**
 - `refreshRate`: Refresh interval in seconds (0 = off)
 - `expandedNodes`: List of node IDs to expand on startup (preserves state)
+- `scrollSensitivity`: Mouse wheel/trackpad vertical sensitivity (0.1..1.0)
 
 ---
 
@@ -200,4 +247,3 @@ Bottom bar showing context and controls.
 - Agent dashboard (who's working on what)
 - Dependency graph visualization
 - Themes / color schemes
-- Mouse support

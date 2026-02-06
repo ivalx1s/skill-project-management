@@ -21,6 +21,7 @@ const (
 	SettingsScreen
 	DetailScreen
 	AgentsScreen
+	ArkanoidScreen
 )
 
 // Styles
@@ -69,30 +70,34 @@ var (
 
 // Model is the bubbletea model
 type model struct {
-	tree             []*TreeNode // The tree data
-	boardRows        []boardRow
-	boardSelectedIdx int
-	boardScrollOff   int
-	quitting        bool
-	err             error
-	refreshInterval time.Duration // Auto-refresh interval
-	lastUpdate      time.Time     // Time of last successful data refresh
-	refreshing      bool          // True while refreshing data
-	loadError       error         // Last load error (nil if online)
-	width           int           // Terminal width for status bar
-	height          int           // Terminal height
-	currentScreen        Screen        // Current screen being displayed
-	previousScreen       Screen        // Screen to return to from detail
-	config               *Config       // Persisted configuration
-	configLoaded         bool          // True after initial config has been applied to tree
-	settingsModel        SettingsModel // Settings screen model
-	detailModel          DetailModel   // Detail view model
-	agentsModel          AgentsModel   // Agents dashboard model
-	commandModel         CommandModel  // Command palette model
-	logger               *Logger       // Session logger
-	confirmQuit          bool          // Show quit confirmation dialog
-	confirmSelection     int           // 0 = No (default), 1 = Yes
-	agentsFilter         int           // Agents filter: 0=all, 1-5=stale minutes
+	tree                  []*TreeNode // The tree data
+	boardRows             []boardRow
+	boardSelectedIdx      int
+	boardScrollOff        int
+	quitting              bool
+	err                   error
+	refreshInterval       time.Duration // Auto-refresh interval
+	lastUpdate            time.Time     // Time of last successful data refresh
+	refreshing            bool          // True while refreshing data
+	loadError             error         // Last load error (nil if online)
+	width                 int           // Terminal width for status bar
+	height                int           // Terminal height
+	currentScreen         Screen        // Current screen being displayed
+	previousScreen        Screen        // Screen to return to from detail
+	config                *Config       // Persisted configuration
+	configLoaded          bool          // True after initial config has been applied to tree
+	settingsModel         SettingsModel // Settings screen model
+	detailModel           DetailModel   // Detail view model
+	agentsModel           AgentsModel   // Agents dashboard model
+	arkanoidModel         ArkanoidModel // Arkanoid mini-game model
+	commandModel          CommandModel  // Command palette model
+	logger                *Logger       // Session logger
+	confirmQuit           bool          // Show quit confirmation dialog
+	confirmSelection      int           // 0 = No (default), 1 = Yes
+	agentsFilter          int           // Agents filter: 0=all, 1-5=stale minutes
+	scrollSensitivity     float64       // Trackpad scroll sensitivity (0.1..1.0)
+	boardScrollRemainder  float64       // Fractional scroll accumulator for board
+	agentsScrollRemainder float64       // Fractional scroll accumulator for agents
 }
 
 func (m model) Init() tea.Cmd {
@@ -157,12 +162,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch msg.String() {
-		case "ctrl+c":
+		// ctrl+c always quits
+		if msg.String() == "ctrl+c" {
 			m.saveConfigOnQuit()
 			m.quitting = true
 			return m, tea.Quit
+		}
 
+		// Command palette consumes ALL keys when active (except ctrl+c above)
+		if m.commandModel.IsActive() {
+			if m.logger != nil {
+				m.logger.Key(msg.String())
+				m.logger.State("command_palette active, input: %q", m.commandModel.input.Value())
+			}
+			var cmd tea.Cmd
+			m.commandModel, cmd = m.commandModel.Update(msg)
+			return m, cmd
+		}
+
+		switch msg.String() {
 		case "q":
 			if m.currentScreen == BoardScreen {
 				m.confirmQuit = true
@@ -170,8 +188,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "esc":
-			// Esc returns to Board from Settings/Detail, or shows quit confirm from Board (but not when filtering)
 			if m.currentScreen == AgentsScreen {
+				m.currentScreen = BoardScreen
+				return m, nil
+			}
+			if m.currentScreen == ArkanoidScreen {
 				m.currentScreen = BoardScreen
 				return m, nil
 			}
@@ -188,17 +209,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-		}
-
-		// Command palette input - must be checked BEFORE board handlers
-		if m.commandModel.IsActive() {
-			if m.logger != nil {
-				m.logger.Key(msg.String())
-				m.logger.State("command_palette active, input: %q", m.commandModel.input.Value())
-			}
-			var cmd tea.Cmd
-			m.commandModel, cmd = m.commandModel.Update(msg)
-			return m, cmd
 		}
 
 		// Board-specific key handlers
@@ -305,16 +315,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		// Arkanoid-specific key handlers
+		if m.currentScreen == ArkanoidScreen {
+			var cmd tea.Cmd
+			m.arkanoidModel, cmd = m.arkanoidModel.Update(msg)
+			return m, cmd
+		}
+
 	case tea.MouseMsg:
 		// Handle mouse events
 		if m.currentScreen == BoardScreen {
+			if steps, handled := consumeVerticalScrollSteps(&m.boardScrollRemainder, m.scrollSensitivity, getScrollDirection(msg.Button)); handled {
+				applySignedScrollSteps(steps, m.boardMoveUp, m.boardMoveDown)
+				return m, nil
+			}
 			switch msg.Button {
-			case tea.MouseButtonWheelUp:
-				m.boardMoveDown() // Natural scrolling (trackpad)
-				return m, nil
-			case tea.MouseButtonWheelDown:
-				m.boardMoveUp() // Natural scrolling (trackpad)
-				return m, nil
 			case tea.MouseButtonLeft:
 				// Tap opens detail for current cursor position
 				if node := m.boardSelectedNode(); node != nil {
@@ -325,13 +340,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if m.currentScreen == AgentsScreen {
+			if steps, handled := consumeVerticalScrollSteps(&m.agentsScrollRemainder, m.scrollSensitivity, getScrollDirection(msg.Button)); handled {
+				applySignedScrollSteps(steps, m.agentsModel.moveUp, m.agentsModel.moveDown)
+				return m, nil
+			}
 			switch msg.Button {
-			case tea.MouseButtonWheelUp:
-				m.agentsModel.moveDown() // Natural scrolling (trackpad)
-				return m, nil
-			case tea.MouseButtonWheelDown:
-				m.agentsModel.moveUp() // Natural scrolling (trackpad)
-				return m, nil
 			case tea.MouseButtonLeft:
 				// Tap opens detail for current cursor position
 				if id := m.agentsModel.selectedElementID(); id != "" {
@@ -339,6 +352,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+		}
+		if m.currentScreen == ArkanoidScreen {
+			var cmd tea.Cmd
+			m.arkanoidModel, cmd = m.arkanoidModel.Update(msg)
+			return m, cmd
 		}
 		if m.currentScreen == DetailScreen {
 			// Forward mouse wheel to viewport for trackpad scrolling
@@ -353,6 +371,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.settingsModel.SetSize(msg.Width, msg.Height)
 		m.detailModel.SetSize(msg.Width, msg.Height)
 		m.agentsModel.SetSize(msg.Width, msg.Height)
+		m.arkanoidModel.SetSize(msg.Width, msg.Height)
 		m.commandModel.SetWidth(msg.Width)
 
 	case treeLoadedMsg:
@@ -449,6 +468,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Update scroll sensitivity if changed
+		if msg.ScrollChanged {
+			m.scrollSensitivity = ClampScrollSensitivity(msg.NewScrollSensitivity)
+			if m.config != nil {
+				m.config.ScrollSensitivity = m.scrollSensitivity
+			}
+		}
+
 		// Restart tick if refresh changed
 		if msg.RefreshChanged && msg.NewInterval > 0 {
 			return m, m.tickCmd()
@@ -462,6 +489,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AgentsLoadedMsg:
 		var cmd tea.Cmd
 		m.agentsModel, cmd = m.agentsModel.Update(msg)
+		return m, cmd
+
+	case arkanoidFrameMsg:
+		if m.currentScreen != ArkanoidScreen {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.arkanoidModel, cmd = m.arkanoidModel.Update(msg)
 		return m, cmd
 
 	case CommandCancelMsg:
@@ -531,7 +566,7 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 		if m.logger != nil {
 			m.logger.Command("settings", "", "opening settings screen")
 		}
-		m.settingsModel = NewSettingsModelWithAgents(m.refreshInterval, m.agentsFilter, nil)
+		m.settingsModel = NewSettingsModelFull(m.refreshInterval, m.agentsFilter, m.scrollSensitivity, nil)
 		m.settingsModel.SetSize(m.width, m.height)
 		m.currentScreen = SettingsScreen
 		return m, nil
@@ -556,6 +591,19 @@ func (m *model) executeCommand(cmd, args string) (tea.Model, tea.Cmd) {
 		m.boardRebuildRows()
 		return m, nil
 
+	case "arkanoid":
+		if m.logger != nil {
+			m.logger.Command("arkanoid", "", "opening arkanoid screen")
+		}
+		m.arkanoidModel = NewArkanoidModel()
+		if m.width > 0 && m.height > 0 {
+			m.arkanoidModel.SetSize(m.width, m.height)
+		} else {
+			m.arkanoidModel.SetSize(80, 24)
+		}
+		m.currentScreen = ArkanoidScreen
+		return m, m.arkanoidModel.Start()
+
 	default:
 		if m.logger != nil {
 			m.logger.Warn("Unknown command: %q", cmd)
@@ -574,7 +622,6 @@ func (m *model) getStaleMinutes() int {
 	return 0
 }
 
-
 // saveConfigOnQuit saves the current configuration before quitting
 func (m *model) saveConfigOnQuit() {
 	// Close logger
@@ -592,8 +639,28 @@ func (m *model) saveConfigOnQuit() {
 	}
 	// Update refresh rate
 	m.config.RefreshRate = int(m.refreshInterval.Seconds())
+	// Update scroll sensitivity
+	m.config.ScrollSensitivity = m.scrollSensitivity
 	// Save to file (ignore errors on quit)
 	_ = m.config.SaveConfig()
+}
+
+func applySignedScrollSteps(steps int, onUp func(), onDown func()) {
+	if steps > 0 {
+		for i := 0; i < steps; i++ {
+			if onDown != nil {
+				onDown()
+			}
+		}
+		return
+	}
+	if steps < 0 {
+		for i := 0; i < -steps; i++ {
+			if onUp != nil {
+				onUp()
+			}
+		}
+	}
 }
 
 func (m model) View() string {
@@ -611,6 +678,8 @@ func (m model) View() string {
 		return m.detailModel.View()
 	case AgentsScreen:
 		return m.agentsModel.View()
+	case ArkanoidScreen:
+		return m.arkanoidModel.View()
 	default:
 		return m.viewBoard()
 	}
@@ -866,10 +935,11 @@ func main() {
 	logger.Info("Config loaded, refresh interval: %v", refreshInterval)
 
 	m := model{
-		refreshInterval: refreshInterval,
-		config:          cfg,
-		logger:          logger,
-		agentsFilter:    cfg.AgentsFilter,
+		refreshInterval:   refreshInterval,
+		config:            cfg,
+		logger:            logger,
+		agentsFilter:      cfg.AgentsFilter,
+		scrollSensitivity: ClampScrollSensitivity(cfg.ScrollSensitivity),
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())

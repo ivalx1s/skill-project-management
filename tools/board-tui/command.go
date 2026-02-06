@@ -45,6 +45,7 @@ func NewCommandModel() CommandModel {
 		commands: []Command{
 			{Name: "filter", Description: "Filter items (e.g., /filter done)"},
 			{Name: "agents", Description: "Show agent assignments"},
+			{Name: "arkanoid", Description: "Open Arkanoid mini-game"},
 			{Name: "settings", Description: "Open settings screen"},
 			{Name: "refresh", Description: "Force refresh data"},
 			{Name: "expand", Description: "Expand all nodes"},
@@ -244,4 +245,3 @@ func (m CommandModel) View() string {
 func (m *CommandModel) GetCommands() []Command {
 	return m.commands
 }
-

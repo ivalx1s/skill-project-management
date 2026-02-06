@@ -84,6 +84,17 @@ func TestNewSettingsModelWithAgents(t *testing.T) {
 	}
 }
 
+func TestNewSettingsModelFullScrollSensitivity(t *testing.T) {
+	m := NewSettingsModelFull(10*time.Second, 0, 0.85, nil)
+
+	if m.scrollSensitivity != 0.85 {
+		t.Errorf("expected scrollSensitivity=0.85, got %v", m.scrollSensitivity)
+	}
+	if m.initialScroll != 0.85 {
+		t.Errorf("expected initialScroll=0.85, got %v", m.initialScroll)
+	}
+}
+
 func TestSettingsModelNavigation(t *testing.T) {
 	m := NewSettingsModel(10*time.Second, nil)
 
@@ -260,6 +271,66 @@ func TestSettingsModelEsc(t *testing.T) {
 				t.Errorf("expected AgentsChanged=false for Esc")
 			}
 		}
+	}
+}
+
+func TestSettingsModelScrollEditFlow(t *testing.T) {
+	m := NewSettingsModelFull(10*time.Second, 0, 0.85, nil)
+
+	// Move focus to scroll group
+	m.focusGroup = GroupScroll
+
+	// First Enter starts edit mode
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatal("expected no close command when starting scroll edit")
+	}
+	if !m.scrollEditing {
+		t.Fatal("expected scrollEditing=true after first Enter")
+	}
+
+	// Right arrow updates draft value
+	before := m.scrollDraftSensitivity
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if m.scrollDraftSensitivity <= before {
+		t.Fatalf("expected draft sensitivity to increase, before=%v after=%v", before, m.scrollDraftSensitivity)
+	}
+
+	// Second Enter commits and closes
+	m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.scrollEditing {
+		t.Fatal("expected scrollEditing=false after commit")
+	}
+	if cmd == nil {
+		t.Fatal("expected close command after scroll commit")
+	}
+
+	msg := cmd()
+	closeMsg, ok := msg.(SettingsCloseMsg)
+	if !ok {
+		t.Fatalf("expected SettingsCloseMsg, got %T", msg)
+	}
+	if !closeMsg.ScrollChanged {
+		t.Fatal("expected ScrollChanged=true after editing sensitivity")
+	}
+	if closeMsg.NewScrollSensitivity <= 0.85 {
+		t.Fatalf("expected increased NewScrollSensitivity, got %v", closeMsg.NewScrollSensitivity)
+	}
+}
+
+func TestSettingsModelScrollEditEscCancelsDraft(t *testing.T) {
+	m := NewSettingsModelFull(10*time.Second, 0, 0.85, nil)
+	m.focusGroup = GroupScroll
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // start editing
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight}) // adjust draft
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})   // cancel edit
+
+	if m.scrollEditing {
+		t.Fatal("expected scrollEditing=false after Esc cancel")
+	}
+	if m.scrollSensitivity != 0.85 {
+		t.Fatalf("expected committed sensitivity unchanged, got %v", m.scrollSensitivity)
 	}
 }
 

@@ -150,10 +150,10 @@ type rowKind int
 
 const (
 	rowHeader    rowKind = iota // agent name line
-	rowSeparator               // ━━━ line
-	rowElement                 // assigned element (selectable)
-	rowChild                   // child of element (selectable)
-	rowBlank                   // empty line between agents
+	rowSeparator                // ━━━ line
+	rowElement                  // assigned element (selectable)
+	rowChild                    // child of element (selectable)
+	rowBlank                    // empty line between agents
 )
 
 type agentRow struct {
@@ -214,8 +214,8 @@ func (m *AgentsModel) SetSize(width, height int) {
 
 // visibleHeight returns how many content rows fit between title and footer
 func (m *AgentsModel) visibleHeight() int {
-	// title(1) + blank(1) + footer_blank(1) + footer(1) = 4 lines of chrome
-	h := m.height - 4
+	// appPadTop(1) + title(1) + blank(1) + footerBlank(1) + footer(1) + appPadBottom(1) = 6
+	h := m.height - 6
 	if h < 1 {
 		h = 1
 	}
@@ -409,14 +409,6 @@ func (m AgentsModel) Update(msg tea.Msg) (AgentsModel, tea.Cmd) {
 
 // View renders the agents screen
 func (m AgentsModel) View() string {
-	if m.loading && len(m.agents) == 0 {
-		return "\n  Loading agents..."
-	}
-
-	if m.err != nil && len(m.agents) == 0 {
-		return fmt.Sprintf("\n  Error: %v\n\n  Press esc to go back", m.err)
-	}
-
 	// Title
 	title := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FFFDF5")).
@@ -436,6 +428,16 @@ func (m AgentsModel) View() string {
 	status := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#626262")).
 		Render(updateInfo)
+
+	help := helpStyle.Render("  ↑↓: navigate | enter: detail | esc/q: back")
+
+	if m.loading && len(m.agents) == 0 {
+		return appStyle.Render(fmt.Sprintf("%s%s\n\n  Loading agents...\n\n%s", title, status, help))
+	}
+
+	if m.err != nil && len(m.agents) == 0 {
+		return appStyle.Render(fmt.Sprintf("%s%s\n\n  Error: %v\n\n%s", title, status, m.err, help))
+	}
 
 	// Content rows
 	vh := m.visibleHeight()
@@ -466,8 +468,5 @@ func (m AgentsModel) View() string {
 		}
 	}
 
-	// Footer
-	help := helpStyle.Render("  ↑↓: navigate | enter: detail | esc/q: back")
-
-	return fmt.Sprintf("%s%s\n\n%s\n%s", title, status, content.String(), help)
+	return appStyle.Render(fmt.Sprintf("%s%s\n\n%s\n%s", title, status, content.String(), help))
 }

@@ -9,7 +9,11 @@ import (
 
 // Default configuration values
 const (
-	DefaultRefreshRate = 10 // seconds
+	DefaultRefreshRate            = 10 // seconds
+	DefaultScrollSensitivity      = 0.5
+	CurrentScrollSpeedSensitivity = 0.85
+	MinScrollSensitivity          = 0.1
+	MaxScrollSensitivity          = 1.0
 )
 
 // Config holds the TUI configuration
@@ -29,7 +33,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		RefreshRate:       DefaultRefreshRate,
 		ExpandedNodes:     []string{},
-		ScrollSensitivity: 0.5,
+		ScrollSensitivity: DefaultScrollSensitivity,
 	}
 }
 
@@ -69,8 +73,20 @@ func LoadConfigFromPath(path string) (*Config, error) {
 	if err := json.Unmarshal(data, config); err != nil {
 		return DefaultConfig(), err
 	}
+	config.ScrollSensitivity = ClampScrollSensitivity(config.ScrollSensitivity)
 
 	return config, nil
+}
+
+// ClampScrollSensitivity normalizes sensitivity to the supported range.
+func ClampScrollSensitivity(value float64) float64 {
+	if value < MinScrollSensitivity {
+		return MinScrollSensitivity
+	}
+	if value > MaxScrollSensitivity {
+		return MaxScrollSensitivity
+	}
+	return value
 }
 
 // SaveConfig saves configuration to the default path.
